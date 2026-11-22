@@ -205,9 +205,9 @@ function updateSim(dt) {
       brake: keys.space
     };
     updateVehicle(player.inCar, dt, activeKeys, getTrafficCars());
-    player.x = player.inCar.position.x;
-    player.z = player.inCar.position.z;
-    player.y = player.inCar.position.y;
+    player.x = player.inCar.position?.x || 0;
+    player.z = player.inCar.position?.z || 0;
+    player.y = player.inCar.position?.y || 0;
     player.angle = player.inCar.rotation.y;
     player.speed = player.inCar.speed || 0;
   } else {
@@ -239,9 +239,9 @@ function renderFrame() {
   // Camera update
   if (player.inCar) {
     const car = player.inCar;
-    const offset = new THREE.Vector3(0, 3.5, -8).applyQuaternion(car.quaternion);
-    camera.position.copy(car.position).add(offset);
-    camera.lookAt(car.position.clone().add(new THREE.Vector3(0, 1, 0)));
+    const offset = new THREE.Vector3(0, 3.5, -8).applyQuaternion(car.quaternion || new THREE.Quaternion());
+    camera.position.copy(car.position || new THREE.Vector3()).add(offset);
+    camera.lookAt(car.position?.clone().add(new THREE.Vector3(0, 1, 0)) || new THREE.Vector3());
   } else {
     const targetPos = new THREE.Vector3(player.x, player.y + 1.5, player.z);
     const camOffset = new THREE.Vector3(Math.sin(player.angle) * -6, 2.2, Math.cos(player.angle) * -6);
@@ -325,6 +325,8 @@ window.__photo = {
       player.x = -300;
       player.z = 300;
       player.y = groundHeight(-300, 300);
+      player.inCar.position = player.inCar.position || new THREE.Vector3(player.x, player.y, player.z);
+      player.inCar.quaternion = player.inCar.quaternion || new THREE.Quaternion();
 
       const packCount = [0, 2, 4, 6, 8, 10][Math.min(getHeat(), 5)] || 0;
       for (let i = 0; i < packCount; i++) {
