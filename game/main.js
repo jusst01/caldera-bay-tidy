@@ -6,7 +6,7 @@ import { buildCity, createRNG, groundHeight, districtAt, collideCircle, eject, s
 import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageVehicle } from './vehicles.js';
 import { spawnTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian } from './pedestrians.js';
-import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock, setPoints, spawnUnit } from './police.js';
+import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock, setPoints, spawnUnit, getPoliceUnits } from './police.js';
 import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, WEAPON_SPECS } from './combat.js';
 import { createEconomy, SHOP_POS, PRICES, TIME_TRIALS } from './economy.js';
 import { createMissions, JOBS } from './missions.js';
@@ -385,6 +385,7 @@ function stepSim(dt) {
   hud.update({
     player,
     heat: getHeat(),
+    police: { units: getPoliceUnits() },
     cash: save.cash,
     rep: save.rep,
     tier: tierFor(save.rep),
@@ -432,6 +433,7 @@ window.__photo = {
     hud.update({
       player,
       heat: getHeat(),
+      police: { units: getPoliceUnits() },
       cash: save.cash,
       rep: save.rep,
       tier: tierFor(save.rep),
@@ -504,7 +506,13 @@ window.__calderaTest = {
     const list = [];
     scene.traverse(node => {
       if (node instanceof THREE.Mesh || node instanceof THREE.Points) {
-        list.push({ type: node.type, name: node.name, pos: node.position.toArray(), visible: node.visible });
+        list.push({
+          type: node.type,
+          name: node.name,
+          pos: node.position.toArray(),
+          visible: node.visible,
+          color: node.material ? node.material.color : null
+        });
       }
     });
     console.log('SCENE DUMP:', list);

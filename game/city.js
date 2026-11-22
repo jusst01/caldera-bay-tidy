@@ -296,7 +296,7 @@ export function buildCity(scene, rng) {
       const bulbMat = new THREE.MeshBasicMaterial({ color: 0xFFE9B0 });
       const bulb = new THREE.Mesh(bulbGeo, bulbMat);
       bulb.position.set(lx, ly + 6, lz);
-      lampGroup.add(bulb);
+      // lampGroup.add(bulb);
     }
   }
   scene.add(lampGroup);

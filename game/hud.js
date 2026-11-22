@@ -153,7 +153,7 @@ export function createHud(hooks) {
 
   function renderMissionPanel(objective) {
     if (objective) {
-      missionPanel.innerHTML = `<h3>Objective</h3><p>${objective}</p>`;
+      missionPanel.innerHTML = `<h3>JOB ${objective.missionIndex + 1}/8 — ${objective.jobLabel}</h3><p>${objective.objective}</p>`;
       missionPanel.style.display = 'block';
     } else {
       missionPanel.style.display = 'none';
@@ -164,7 +164,7 @@ export function createHud(hooks) {
     const dispatchSignature = JSON.stringify(units.map(u => ({n: u.name, t: u.tactic})));
     if (dispatchSignature !== lastDispatch) {
       lastDispatch = dispatchSignature;
-      dispatchPanel.innerHTML = `<h3>Dispatch</h3><ul>${units.map(u => `<li>${u.name}: ${u.tactic}</li>`).join('')}</ul>`;
+      dispatchPanel.innerHTML = `<h3>Dispatch</h3><ul>${units.map(u => `<li>${u.name}: ${u.tactic} (${Math.round(u.dist)}m)</li>`).join('')}</ul>`;
     }
   }
 
@@ -177,12 +177,12 @@ export function createHud(hooks) {
   }
 
   function renderTakeover(count) {
-    takeoverStrip.innerHTML = `<p>Takeover Progress: ${count || 0}/10 Districts</p>`;
+    takeoverStrip.innerHTML = `<p>Takeover Progress: ${count || 0}/5 Districts</p>`;
   }
 
   function renderStatus(player) {
-    hpBar.textContent = `HP: ${player.hp || 0}%`;
-    armourBar.textContent = `AR: ${player.armour || 0}%`;
+    hpBar.textContent = `HP: ${Math.round(player.hp || 0)}%`;
+    armourBar.textContent = `AR: ${Math.round(player.armour || 0)}%`;
     ammoBar.textContent = `AMMO: ${player.ammo || 0}`;
   }
 

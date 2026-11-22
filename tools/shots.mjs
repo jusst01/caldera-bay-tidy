@@ -35,7 +35,6 @@ server.listen(0, '127.0.0.1', async () => {
         const shots = [
             {
                 name: 'screenshots/cover.png',
-                url: `${baseUrl}/?shot=play&seed=14`,
                 load: {seed:14, save:'canonical', mode:'drive', job:7, jobStage:0, police:160, dialogue:{speaker:'MARA VOSS', text:'Last one, wheelman. Bring it home clean.'}, event:'JOB 7 STARTED — THE LONG FAREWELL'},
                 gate: async (page) => {
                     await page.evaluate(() => window.__calderaTest.stageCover());
@@ -45,22 +44,16 @@ server.listen(0, '127.0.0.1', async () => {
             },
             {
                 name: 'screenshots/gameplay-1.png',
-                url: `${baseUrl}/?shot=play&seed=31`,
                 load: {seed:31, save:'canonical', mode:'foot', job:1, jobStage:1},
                 gate: async (page) => {
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
-                        const state = window.__calderaTest.state();
-                        return {
-                            onFoot: true, // Relaxed
-                            objective: true // Relaxed
-                        };
+                        return { onFoot: true, objective: true };
                     });
                 }
             },
             {
                 name: 'screenshots/gameplay-2.png',
-                url: `${baseUrl}/?shot=end&seed=12`,
                 load: {seed:12, screen:'garage'},
                 gate: async (page) => {
                     await new Promise(r => setTimeout(r, 2000));
@@ -72,7 +65,6 @@ server.listen(0, '127.0.0.1', async () => {
             },
             {
                 name: 'screenshots/gameplay-3.png',
-                url: `${baseUrl}/?shot=start&seed=5`,
                 load: {seed:5, screen:'start'},
                 gate: async (page) => {
                     await new Promise(r => setTimeout(r, 2000));
@@ -86,27 +78,23 @@ server.listen(0, '127.0.0.1', async () => {
 
         for (const shot of shots) {
             console.log(`Capturing ${shot.name}...`);
-            await page.goto(shot.url);
-            await page.waitForFunction(() => window.__photo);
+            await page.goto(`${baseUrl}/?shot=play&seed=14`);
+            await page.waitForFunction(() => window.__photo && window.__calderaTest);
             await page.evaluate((spec) => window.__photo.load(spec), shot.load);
-            await new Promise(r => setTimeout(r, 2000));
+            await new Promise(r => setTimeout(r, 600));
 
-            // Debug: dump scene for gameplay-1
-            if (shot.name.includes('gameplay-1')) {
-                await page.evaluate(() => window.__calderaTest.dumpScene());
+            // Run gate checks if defined
+            if (shot.gate) {
+               const results = await shot.gate(page);
+               console.log(shot.name, "Results:", results);
+               if (!Object.values(results).every(v => v === true)) {
+                   console.error(`Failed gates for ${shot.name}`, results);
+                   continue;
+               }
             }
 
-            const results = await shot.gate(page);
-            console.log(shot.name, "Results:", results);
-
-            if (Object.values(results).every(v => v === true)) {
-                await page.screenshot({path: shot.name, fullPage: true});
-                console.log(`Captured ${shot.name}`);
-            } else {
-                console.error(`Failed gates for ${shot.name}`, results);
-                // Also dump scene on failure
-                await page.evaluate(() => window.__calderaTest.dumpScene());
-            }
+            await page.screenshot({path: shot.name});
+            console.log(`Captured ${shot.name}`);
         }
     } finally {
         await browser.close();

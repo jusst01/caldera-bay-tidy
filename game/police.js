@@ -180,3 +180,7 @@ export function coverAudit(camera) {
   });
 }
 
+export function getPoliceUnits() {
+  return policeUnits.map(u => ({ name: u.name, tactic: u.tactic, dist: u.dist }));
+}
+

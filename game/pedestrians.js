@@ -28,6 +28,7 @@ export function initPedestrians(scene, rng) {
 function spawnPed() {
   const x = (rngRef() - 0.5) * 300;
   const z = (rngRef() - 0.5) * 300;
+  if (Math.abs(x) < 0.1 && Math.abs(z) < 0.1) return;
   const archKeys = Object.keys(archetypes);
   const type = archKeys[Math.floor(rngRef() * archKeys.length)];
   const arch = archetypes[type];
