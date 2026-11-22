@@ -144,6 +144,11 @@ export function stageCover(camera, heroPos) {
   // Front pair abeam of the hero car measured against the CAMERA
   // rest queued 16–75 m
   policeUnits.forEach((u, i) => {
+    if (!u.mesh.parent) {
+      sceneRef.add(u.mesh);
+    }
+    u.mesh.visible = true;
+    u.mesh.scale.set(1, 1, 1);
     if (i < 2) {
       // Front pair abeam (side-by-side with hero car)
       u.x = heroPos.x + (i === 0 ? -4 : 4);
@@ -155,6 +160,7 @@ export function stageCover(camera, heroPos) {
       u.z = heroPos.z + dist;
     }
     u.mesh.position.set(u.x, groundHeight(u.x, u.z), u.z);
+    u.mesh.rotation.y = Math.PI; // Face player
   });
 }
 

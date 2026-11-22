@@ -61,22 +61,24 @@ server.listen(0, '127.0.0.1', async () => {
             {
                 name: 'screenshots/gameplay-2.png',
                 url: `${baseUrl}/?shot=end&seed=12`,
-                load: {seed:12},
+                load: {seed:12, screen:'garage'},
                 gate: async (page) => {
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
-                        return { garage: true }; // Relaxed
+                        const garageEl = document.getElementById('screen-root');
+                        return { garage: !!garageEl && garageEl.style.display !== 'none' && garageEl.textContent.includes("IRIS'S GARAGE") };
                     });
                 }
             },
             {
                 name: 'screenshots/gameplay-3.png',
                 url: `${baseUrl}/?shot=start&seed=5`,
-                load: {seed:5},
+                load: {seed:5, screen:'start'},
                 gate: async (page) => {
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
-                        return { start: true, takeover: true }; // Relaxed
+                        const startEl = document.getElementById('screen-root');
+                        return { start: !!startEl && startEl.style.display !== 'none' && startEl.textContent.includes("YOUR RISE") };
                     });
                 }
             }
@@ -89,14 +91,21 @@ server.listen(0, '127.0.0.1', async () => {
             await page.evaluate((spec) => window.__photo.load(spec), shot.load);
             await new Promise(r => setTimeout(r, 2000));
 
+            // Debug: dump scene for gameplay-1
+            if (shot.name.includes('gameplay-1')) {
+                await page.evaluate(() => window.__calderaTest.dumpScene());
+            }
+
             const results = await shot.gate(page);
             console.log(shot.name, "Results:", results);
 
             if (Object.values(results).every(v => v === true)) {
-                await page.screenshot({path: shot.name});
+                await page.screenshot({path: shot.name, fullPage: true});
                 console.log(`Captured ${shot.name}`);
             } else {
                 console.error(`Failed gates for ${shot.name}`, results);
+                // Also dump scene on failure
+                await page.evaluate(() => window.__calderaTest.dumpScene());
             }
         }
     } finally {

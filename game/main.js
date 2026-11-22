@@ -451,10 +451,19 @@ window.__photo = {
         spawnUnit({x: player.x, z: player.z});
       }
       stageCover(camera, {x: player.x, z: player.z});
+      hud.setPanels('cover');
     } else {
       player.inCar = null;
       player.x = -300; player.z = 300; player.y = groundHeight(-300, 300);
+      hud.setPanels('game');
     }
+
+    if (spec.screen === 'garage') {
+      openGarageScreen(save, garageCallbacks);
+    } else if (spec.screen === 'start') {
+      openStartScreen(save, { onContinue: () => {}, onNewGame: () => {} });
+    }
+
     if (spec.mode === 'drive') {
       camera.position.set(-300, 3.5, 308); camera.lookAt(-300, 1.0, 300);
     } else {
@@ -491,6 +500,16 @@ window.__calderaTest = {
   interact: () => handleInteractPress(),
   stageCover: () => stageCover(camera, {x: player.x, z: player.z}),
   coverAudit: () => coverAudit(camera),
+  dumpScene: () => {
+    const list = [];
+    scene.traverse(node => {
+      if (node instanceof THREE.Mesh || node instanceof THREE.Points) {
+        list.push({ type: node.type, name: node.name, pos: node.position.toArray(), visible: node.visible });
+      }
+    });
+    console.log('SCENE DUMP:', list);
+    return list;
+  },
   save: canonicalSave()
 };
 
