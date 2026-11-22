@@ -1,109 +1,144 @@
 import * as THREE from './three.module.min.js';
+import * as THREE2 from './three.module.min.js';
+import * as THREE3 from './three.module.min.js';
 
 function createRNG(seed) {
   return function() {
-    seed |= 0;
-    seed = (seed + 0x6D2B79F5) | 0;
-    var t = Math.imul(seed ^ (seed >>> 15), 1 | Math.imul(seed ^ (seed >>> 13), 61));
-    return ((t ^ (t >>> 16)) >>> 0) / 4294967296;
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
 
+const districts = [
+  { id: 'muelle', center: [-300, 300] },
+  { id: 'paseo', center: [330, 60] },
+  { id: 'verde', center: [300, -300] },
+  { id: 'ceniza', center: [-300, -300] },
+  { id: 'cumbre', center: [0, -500] }
+];
+
 function groundHeight(x, z) {
-  const d = Math.sqrt(x * x + z * z);
-  const bowl = Math.max(0, 100 - d * 0.2);
-  const ridge = Math.max(0, (z + 500) * 0.1, (x - 300) * 0.1);
-  return bowl + ridge;
+  const dx = x / 600;
+  const dz = z / 600;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  let h = Math.max(0, dist * 50 - 5);
+  if (z < -300) h += Math.pow((z + 300) / 200, 2) * 50;
+  if (x > 200 && z > 200) h += 20;
+  return h;
 }
 
 function districtAt(x, z) {
-  const dists = {
-    muelle: [-300, 300],
-    paseo: [330, 60],
-    verde: [300, -300],
-    ceniza: [-300, -300],
-    cumbre: [0, -500]
-  };
-  let closest = 'muelle';
-  let minD = Infinity;
-  for (const [id, [dx, dz]] of Object.entries(dists)) {
-    const d = Math.hypot(x - dx, z - dz);
-    if (d < minD) { minD = d; closest = id; }
+  let nearestDist = Infinity;
+  let nearestDistrict = 'muelle';
+  for (const d of districts) {
+    const dist = Math.sqrt(Math.pow(x - d.center[0], 2) + Math.pow(z - d.center[1], 2));
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearestDistrict = d.id;
+    }
   }
-  return closest;
+  return nearestDistrict;
 }
 
 function collideCircle(x, z, radius) {
-  // Simplistic collider: assume buildings at grid points
-  const gx = Math.floor(x / 64) * 64;
-  const gz = Math.floor(z / 64) * 64;
-  return Math.abs(x - gx) < radius + 10 || Math.abs(z - gz) < radius + 10;
+  const h = groundHeight(x, z);
+  return h > 10;
 }
 
 function eject(x, z, radius) {
-  let nx = x, nz = z;
-  while (collideCircle(nx, nz, radius)) {
-    nx += 64; nz += 64;
-  }
-  return [nx, nz];
+  return { x, z };
 }
 
-const sunLight = new THREE.DirectionalLight(0xFFB066, 2.3);
-const hemiLight = new THREE.HemisphereLight(0x8A63B8, 0x40302A, 0.5);
-const ambientLight = new THREE.AmbientLight(0x403050, 0.35);
+function createBuilding(scene, x, z, y, rng) {
+  const buildingGeom = new THREE.BoxGeometry(1, 1, 1);
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x888888,
+    emissive: 0xFFB066,
+    emissiveIntensity: 0.25
+  });
+  const building = new THREE.Mesh(buildingGeom, mat);
+  building.position.set(x, y + 5, z);
+  building.scale.set(10 + rng() * 20, 20 + rng() * 40, 10 + rng() * 20);
+  scene.add(building);
+}
+
+function createPalm(scene, x, z, y, rng) {
+  const palm = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1, 5), new THREE.MeshStandardMaterial({ color: 0x554433 }));
+  palm.add(trunk);
+  palm.position.set(x, y + 2.5, z);
+  scene.add(palm);
+}
 
 function buildCity(scene, seed) {
   const rng = createRNG(seed);
 
   // Ground
-  const plane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1500, 1500),
-    new THREE.MeshStandardMaterial({ color: 0x7A5F42 })
-  );
-  plane.rotation.x = -Math.PI / 2;
-  scene.add(plane);
+  const planeGeometry = new THREE.PlaneGeometry(1500, 1500);
+  const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x7A5F42 });
+  const ground = new THREE.Mesh(planeGeometry, groundMaterial);
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
 
-  // Buildings (InstancedMeshes)
-  const geometries = [new THREE.BoxGeometry(20, 50, 20), new THREE.BoxGeometry(25, 60, 25), new THREE.BoxGeometry(30, 70, 30), new THREE.BoxGeometry(20, 80, 20)];
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x555555,
-    emissive: 0xFFB066,
-    emissiveIntensity: 1.0
-  });
+  // Buildings
+  for (let i = 0; i < 774; i++) {
+    const x = (rng() - 0.5) * 1000;
+    const z = (rng() - 0.5) * 1000;
+    const y = groundHeight(x, z);
+    if (Math.abs(x) < 50 && Math.abs(z) < 50) continue;
+    createBuilding(scene, x, z, y, rng);
+  }
 
-  geometries.forEach((geo, i) => {
-    const mesh = new THREE.InstancedMesh(geo, material, 200);
-    for (let j = 0; j < 200; j++) {
-      const x = (rng() - 0.5) * 1000;
-      const z = (rng() - 0.5) * 1000;
-      const y = groundHeight(x, z) + 25;
-      const matrix = new THREE.Matrix4().setPosition(x, y, z);
-      mesh.setMatrixAt(j, matrix);
-    }
-    scene.add(mesh);
-  });
+  // Palms
+  for (let i = 0; i < 300; i++) {
+    const x = (rng() - 0.5) * 1000;
+    const z = (rng() - 0.5) * 1000;
+    const y = groundHeight(x, z);
+    createPalm(scene, x, z, y, rng);
+  }
+
+  // Street Lamps
+  for (let i = 0; i < 50; i++) {
+    const x = (i % 2 === 0 ? 256 : -256);
+    const z = i * 36 - 500;
+    const y = groundHeight(x, z);
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 10), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+    lamp.position.set(x, y + 5, z);
+    scene.add(lamp);
+  }
 
   // Volcano
   const volcano = new THREE.Mesh(
-    new THREE.ConeGeometry(200, 220),
-    new THREE.MeshStandardMaterial({ color: 0x37303E, emissive: 0xFF6A1A, emissiveIntensity: 0.5 })
+    new THREE.ConeGeometry(100, 220, 32),
+    new THREE.MeshStandardMaterial({ color: 0x37303E })
   );
-  volcano.position.set(0, 110, -600);
+  volcano.position.set(0, 110, -500);
   scene.add(volcano);
 
   // Lighting
-  sunLight.position.set(-120, 95, 260);
-  scene.add(sunLight, hemiLight, ambientLight);
+  const light = new THREE.DirectionalLight(0xFFB066, 2.3);
+  light.position.set(-120, 95, 260);
+  scene.add(light);
+
+  const hemiLight = new THREE.HemisphereLight(0x8A63B8, 0x40302A, 0.5);
+  scene.add(hemiLight);
+
+  const ambientLight = new THREE.AmbientLight(0x403050, 0.35);
+  scene.add(ambientLight);
+
+  scene.fog = new THREE.FogExp2(0xD97A44, 0.0020);
+
+  // Sky Dome
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(1000, 32, 32),
+    new THREE.MeshBasicMaterial({ color: 0x222222, side: THREE.BackSide })
+  );
+  scene.add(sky);
 }
 
-function updateSun(subjectPosition) {
-  sunLight.position.set(subjectPosition.x - 120, subjectPosition.y + 95, subjectPosition.z + 260);
-  sunLight.target.position.copy(subjectPosition);
-}
-
-function setFinaleDusk(on) {
-  const multiplier = on ? 1.4 : 1.0;
-  sunLight.intensity = 2.3 * multiplier;
-}
+function updateSun(time) {}
+function setFinaleDusk(on) {}
 
 export { createRNG, groundHeight, districtAt, collideCircle, eject, buildCity, updateSun, setFinaleDusk };
