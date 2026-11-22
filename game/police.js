@@ -13,7 +13,7 @@ let sceneRef = null;
 let points = 0;
 let pointsFloor = 0;
 let policeUnits = [];
-let rng = createRNG(777);
+let rng = null;
 let searchTimer = 0;
 let lineOfSight = false;
 let lastRoadblockTime = 0;
@@ -24,7 +24,7 @@ const CRIME_POINTS = {
 
 const UNIT_NAMES = ['PERALTA', 'GARZA', 'ROCHA', 'SOTO', 'NAVARRO', 'CAMPOS', 'MEDINA', 'ORTEGA', 'VARGAS', 'MENDOZA'];
 
-export function initPolice(scene) {
+export function initPolice(scene, rngInstance) {
   sceneRef = scene;
   points = 0;
   pointsFloor = 0;
@@ -32,6 +32,7 @@ export function initPolice(scene) {
   searchTimer = 0;
   lineOfSight = false;
   lastRoadblockTime = 0;
+  rng = rngInstance || createRNG(777);
 }
 
 export function reportCrime(type, pos, isPlayer) {
@@ -124,7 +125,7 @@ function updateUnits(dt, playerPos, heatLevel) {
   });
 }
 
-function spawnUnit(playerPos) {
+export function spawnUnit(playerPos) {
   const x = playerPos.x + (rng() - 0.5) * 100;
   const z = playerPos.z + (rng() - 0.5) * 100;
   const mesh = createVehicleMesh('fenix', 0x111122);
@@ -138,21 +139,38 @@ function spawnUnit(playerPos) {
   });
 }
 
-export function stageCover() {
+export function stageCover(camera, heroPos) {
   // Stage police units around player/camera
+  // Front pair abeam of the hero car measured against the CAMERA
+  // rest queued 16–75 m
   policeUnits.forEach((u, i) => {
-    // Dummy positioning
-    u.x = -300 + (i % 2 === 0 ? 5 : -5);
-    u.z = 300 + (i < 2 ? 4 : 20 + i * 5);
+    if (i < 2) {
+      // Front pair abeam (side-by-side with hero car)
+      u.x = heroPos.x + (i === 0 ? -4 : 4);
+      u.z = heroPos.z;
+    } else {
+      // Rest queued 16-75 m
+      const dist = 16 + (i - 2) * (59 / (policeUnits.length - 2));
+      u.x = heroPos.x + (i % 2 === 0 ? -6 : 6);
+      u.z = heroPos.z + dist;
+    }
+    u.mesh.position.set(u.x, groundHeight(u.x, u.z), u.z);
   });
 }
 
-export function coverAudit() {
-  return policeUnits.map(u => ({
-    name: u.name,
-    tactic: u.tactic,
-    position: { x: u.x, y: groundHeight(u.x, u.z), z: u.z },
-    screen: { x: 50, y: 50 } // Simplified
-  }));
+export function coverAudit(camera) {
+  const v = new THREE.Vector3();
+  return policeUnits.map(u => {
+    v.set(u.x, groundHeight(u.x, u.z), u.z);
+    v.project(camera);
+    // Convert -1..1 to 0..100
+    return {
+      name: u.name,
+      tactic: u.tactic,
+      distance: u.dist,
+      sx: (v.x * 0.5 + 0.5) * 100,
+      sy: (-(v.y * 0.5) + 0.5) * 100 // Inverted Y for screen space
+    };
+  });
 }
 

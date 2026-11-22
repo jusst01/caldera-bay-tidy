@@ -6,7 +6,7 @@ import { buildCity, createRNG, groundHeight, districtAt, collideCircle, eject, s
 import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageVehicle } from './vehicles.js';
 import { spawnTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian } from './pedestrians.js';
-import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock, setPoints } from './police.js';
+import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock, setPoints, spawnUnit } from './police.js';
 import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, WEAPON_SPECS } from './combat.js';
 import { createEconomy, SHOP_POS, PRICES, TIME_TRIALS } from './economy.js';
 import { createMissions, JOBS } from './missions.js';
@@ -302,7 +302,7 @@ function handleMugPress() {
 function init() {
   // Initialize world and systems
   buildCity(scene, rng);
-  initPolice(scene);
+  initPolice(scene, rng);
   initPedestrians(scene, rng);
   initCombat(scene, {
     onGunshot: (pos) => reportCrime('gunshot', pos, true),
@@ -410,7 +410,7 @@ window.__photo = {
     rng = createRNG(seed);
     while (scene.children.length > 0) scene.remove(scene.children[0]);
     buildCity(scene, rng);
-    initPolice(scene);
+    initPolice(scene, rng);
     initPedestrians(scene, rng);
     // Apply save
     if (spec.save === 'canonical') {
@@ -444,6 +444,13 @@ window.__photo = {
       const car = spawnVehicle('zorro', -300, 300, 0, scene);
       player.inCar = car;
       player.x = -300; player.z = 300;
+      // Spawn police for heat
+      const heatLevel = getHeat();
+      const targetCount = [0, 2, 4, 6, 8, 10][heatLevel];
+      for (let i = 0; i < targetCount; i++) {
+        spawnUnit({x: player.x, z: player.z});
+      }
+      stageCover(camera, {x: player.x, z: player.z});
     } else {
       player.inCar = null;
       player.x = -300; player.z = 300; player.y = groundHeight(-300, 300);
@@ -482,8 +489,8 @@ window.__calderaTest = {
   driveToward: (x, z) => { console.log('Drive toward:', x, z); },
   interactables: () => interactables,
   interact: () => handleInteractPress(),
-  stageCover: () => stageCover(),
-  coverAudit: () => coverAudit(),
+  stageCover: () => stageCover(camera, {x: player.x, z: player.z}),
+  coverAudit: () => coverAudit(camera),
   save: canonicalSave()
 };
 
