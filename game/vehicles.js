@@ -1,62 +1,110 @@
 import * as THREE from './three.module.min.js';
 
 export const VEHICLE_ROSTER = [
-  { id: 'colibri', name: 'Colibrí', class: 'compact', topSpeed: 130, time0to100: 9.5, grip: 0.72, mass: 900, chop: 50, colour: '#444' },
-  { id: 'sirena', name: 'Sirena', class: 'taxi', topSpeed: 150, time0to100: 8.0, grip: 0.75, mass: 1200, chop: 80, colour: '#ff0' },
-  { id: 'caiman', name: 'Caimán', class: 'van', topSpeed: 120, time0to100: 10.5, grip: 0.65, mass: 1900, chop: 100, colour: '#999' },
-  { id: 'mula', name: 'Mula', class: 'pickup', topSpeed: 140, time0to100: 8.8, grip: 0.80, mass: 1600, chop: 120, colour: '#630' },
-  { id: 'boxer', name: 'Bóxer', class: 'truck', topSpeed: 95, time0to100: 13.0, grip: 0.55, mass: 3200, chop: 90, colour: '#f60' },
-  { id: 'fantasma', name: 'Fantasma', class: 'luxury', topSpeed: 180, time0to100: 6.0, grip: 0.78, mass: 1600, chop: 300, colour: '#fff' },
-  { id: 'corsario', name: 'Corsario S', class: 'muscle', topSpeed: 190, time0to100: 5.2, grip: 0.70, mass: 1500, chop: 220, colour: '#f00' },
-  { id: 'zorro', name: 'Zorro GT', class: 'sports', topSpeed: 220, time0to100: 4.1, grip: 0.85, mass: 1300, chop: 320, colour: '#00f' },
-  { id: 'relampago', name: 'Relámpago', class: 'super', topSpeed: 260, time0to100: 3.2, grip: 0.90, mass: 1200, chop: 400, colour: '#0f0' },
-  { id: 'fenix', name: 'Fénix', class: 'police', topSpeed: 200, time0to100: 4.8, grip: 0.82, mass: 1500, chop: 0, colour: '#000' },
-  { id: 'perro', name: 'Perro', class: 'swat', topSpeed: 150, time0to100: 7.0, grip: 0.75, mass: 2600, chop: 0, colour: '#333' },
-  { id: 'halcon', name: 'Halcón', class: 'heli', topSpeed: 0, time0to100: 0, grip: 0, mass: 0, chop: 0, colour: '#000' }
+  {id: 'colibri', name: 'Colibrí', topSpeed: 130, grip: 0.72, class: 'compact', chop: 50, colour: '#ff0000'},
+  {id: 'sirena', name: 'Sirena', topSpeed: 150, grip: 0.75, class: 'taxi', chop: 80, colour: '#ffff00'},
+  {id: 'caiman', name: 'Caimán', topSpeed: 120, grip: 0.65, class: 'van', chop: 100, colour: '#808080'},
+  {id: 'mula', name: 'Mula', topSpeed: 140, grip: 0.80, class: 'pickup', chop: 120, colour: '#00ff00'},
+  {id: 'boxer', name: 'Bóxer', topSpeed: 95, grip: 0.55, class: 'truck', chop: 90, colour: '#0000ff'},
+  {id: 'fantasma', name: 'Fantasma', topSpeed: 180, grip: 0.78, class: 'luxury', chop: 300, colour: '#ffffff'},
+  {id: 'corsario', name: 'Corsario S', topSpeed: 190, grip: 0.70, class: 'muscle', chop: 220, colour: '#ff00ff'},
+  {id: 'zorro', name: 'Zorro GT', topSpeed: 220, grip: 0.85, class: 'sports', chop: 320, colour: '#ff8800'},
+  {id: 'relampago', name: 'Relámpago', topSpeed: 260, grip: 0.90, class: 'super', chop: 400, colour: '#00ffff'},
+  {id: 'fenix', name: 'Fénix', topSpeed: 200, grip: 0.82, class: 'police', chop: 0, colour: '#000000'},
+  {id: 'perro', name: 'Perro', topSpeed: 150, grip: 0.75, class: 'SWAT', chop: 0, colour: '#000088'},
+  {id: 'halcon', name: 'Halcón', topSpeed: 200, grip: 0.95, class: 'heli', chop: 0, colour: '#555555'}
 ];
+
+function getGroundHeight(x, z) {
+  return 0;
+}
 
 export function createVehicleMesh(id) {
   const group = new THREE.Group();
-  const v = VEHICLE_ROSTER.find(r => r.id === id);
-  if (!v) return group;
-  const geometry = new THREE.BoxGeometry(2, 1, 4);
-  const material = new THREE.MeshPhongMaterial({ color: v.colour });
-  const body = new THREE.Mesh(geometry, material);
+  const spec = VEHICLE_ROSTER.find(v => v.id === id);
+
+  const bodyGeo = new THREE.BoxGeometry(2, 0.8, 4);
+  const bodyMat = new THREE.MeshPhongMaterial({ color: spec.colour });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.5;
   group.add(body);
-  if (id === 'fenix' || id === 'perro') {
-    const lightBar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.2), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-    lightBar.position.set(0, 0.6, 0);
-    group.add(lightBar);
+
+  const cabinGeo = new THREE.BoxGeometry(1.6, 0.6, 2);
+  const cabinMat = new THREE.MeshPhongMaterial({ color: '#222222' });
+  const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+  cabin.position.set(0, 1.2, 0);
+  group.add(cabin);
+
+  const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.4, 8);
+  const wheelMat = new THREE.MeshPhongMaterial({ color: '#111111' });
+
+  for (let i = 0; i < 4; i++) {
+    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(i % 2 === 0 ? -1 : 1, 0.3, i < 2 ? -1.5 : 1.5);
+    group.add(wheel);
   }
-  if (id === 'halcon') {
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2, 8), new THREE.MeshBasicMaterial({ color: 0xffffcc, transparent: true, opacity: 0.5 }));
+
+  if (spec.class === 'police' || spec.class === 'SWAT') {
+    const lightBar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.5), new THREE.MeshBasicMaterial({ color: '#ff0000' }));
+    lightBar.position.set(0, 1.6, 0);
+    group.add(lightBar);
+  } else if (spec.class === 'heli') {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2, 16), new THREE.MeshBasicMaterial({ color: '#ffffaa', transparent: true, opacity: 0.5 }));
     cone.position.set(0, -1, 0);
+    cone.rotation.x = Math.PI;
     group.add(cone);
   }
+
   return group;
 }
 
 export function spawnVehicle(id, x, z, heading, scene) {
-  const v = VEHICLE_ROSTER.find(r => r.id === id);
-  const car = { id, x, z, y: 0, angle: heading, speed: 0, name: v.name, durability: 100, engine: true };
-  return car;
+  const spec = VEHICLE_ROSTER.find(v => v.id === id);
+  const mesh = createVehicleMesh(id);
+  scene.add(mesh);
+
+  const vehicle = {
+    id,
+    x,
+    z,
+    y: getGroundHeight(x, z),
+    angle: heading,
+    speed: 0,
+    name: spec.name,
+    durability: 100,
+    mesh: mesh,
+    dead: false
+  };
+
+  mesh.position.set(x, vehicle.y, z);
+  mesh.rotation.y = heading;
+
+  return vehicle;
 }
 
 export function updateVehicle(vehicle, dt) {
-  if (!vehicle.engine) return;
-  const v = VEHICLE_ROSTER.find(r => r.id === vehicle.id);
-  const drag = 0.1;
-  vehicle.speed -= vehicle.speed * drag * dt;
+  if (vehicle.dead) return;
+
+  const drag = 0.98;
+  vehicle.speed *= drag;
+
   vehicle.x += Math.sin(vehicle.angle) * vehicle.speed * dt;
   vehicle.z += Math.cos(vehicle.angle) * vehicle.speed * dt;
+  vehicle.y = getGroundHeight(vehicle.x, vehicle.z);
+
+  vehicle.mesh.position.set(vehicle.x, vehicle.y, vehicle.z);
+  vehicle.mesh.rotation.y = vehicle.angle;
+
+  if (vehicle.durability <= 0) {
+    vehicle.dead = true;
+    vehicle.speed = 0;
+  }
 }
 
 export function damageVehicle(vehicle, amount) {
   vehicle.durability -= amount;
-  if (vehicle.durability <= 0) {
-    vehicle.durability = 0;
-    vehicle.engine = false;
-  }
+  if (vehicle.durability < 0) vehicle.durability = 0;
 }
 
 export function markStolen(vehicle) {

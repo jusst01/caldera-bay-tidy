@@ -1,30 +1,42 @@
 import * as THREE from './three.module.min.js';
-import { VEHICLE_ROSTER } from './vehicles.js';
+import { spawnVehicle, updateVehicle } from './vehicles.js';
 
 let trafficCars = [];
+let seed = 12345;
 
-export function initTraffic() {
+function seededRandom() {
+  seed = (seed * 16807) % 2147483647;
+  return (seed - 1) / 2147483646;
+}
+
+export function initTraffic(scene) {
   trafficCars = [];
+  for (let i = 0; i < 24; i++) {
+    const x = (seededRandom() - 0.5) * 500;
+    const z = (seededRandom() - 0.5) * 500;
+    const car = spawnVehicle('colibri', x, z, seededRandom() * Math.PI * 2, scene);
+    trafficCars.push(car);
+  }
 }
 
 export function spawnTraffic() {
-  if (trafficCars.length >= 24) return;
-  const civilianCars = VEHICLE_ROSTER.filter(v => v.class !== 'police' && v.class !== 'heli' && v.class !== 'swat');
-  const type = civilianCars[Math.floor(Math.random() * civilianCars.length)];
-  const car = {
-    id: type.id,
-    x: Math.random() * 100,
-    z: Math.random() * 100,
-    angle: Math.random() * Math.PI * 2,
-    speed: 10 + Math.random() * 20
-  };
-  trafficCars.push(car);
+  return trafficCars;
 }
 
 export function updateTraffic(dt) {
   trafficCars.forEach(car => {
-    car.x += Math.sin(car.angle) * car.speed * dt;
-    car.z += Math.cos(car.angle) * car.speed * dt;
+    car.speed = 20;
+
+    let slowDown = false;
+    trafficCars.forEach(other => {
+      if (car === other) return;
+      const dist = Math.sqrt((car.x - other.x)**2 + (car.z - other.z)**2);
+      if (dist < 10) slowDown = true;
+    });
+
+    if (slowDown) car.speed *= 0.5;
+
+    updateVehicle(car, dt);
   });
 }
 
