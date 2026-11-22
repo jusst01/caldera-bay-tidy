@@ -257,7 +257,7 @@ function renderFrame() {
     player: {
       hp: player.hp,
       armour: player.armour,
-      ammo: getAmmo(),
+      ammo: getAmmo().current,
       inCar: !!player.inCar,
       x: player.x,
       z: player.z,
@@ -340,10 +340,9 @@ window.__photo = {
       player.z = 300;
       player.y = groundHeight(-300, 300);
 
+      const pedOffsets = [{x: 3, z: 2}, {x: -4, z: 5}, {x: 6, z: -3}, {x: -2, z: -6}, {x: 8, z: 6}];
       for (let i = 0; i < 5; i++) {
-        const angle = i * (Math.PI / 2.5);
-        const dist = 3 + i * 1.5;
-        debugSetPed(i, -300 + Math.cos(angle) * dist, 300 + Math.sin(angle) * dist, angle);
+        debugSetPed(i, player.x + pedOffsets[i].x, player.z + pedOffsets[i].z, 0);
       }
       hud.setPanels('game');
     }
@@ -361,11 +360,11 @@ window.__photo = {
 
     // 8. Camera
     if (spec.mode === 'drive') {
-      camera.position.set(-300, 3.5, 308);
-      camera.lookAt(-300, 1.0, 300);
+      camera.position.set(player.x, player.y + 3.5, player.z + 8);
+      camera.lookAt(player.x, player.y + 1.0, player.z);
     } else if (spec.mode === 'foot') {
-      camera.position.set(-300, player.y + 2.2, 306);
-      camera.lookAt(-300, player.y + 1.0, 300);
+      camera.position.set(player.x, player.y + 2.2, player.z + 6);
+      camera.lookAt(player.x, player.y + 1.0, player.z);
     }
 
     // 9. Dialogue / Event queues
@@ -375,7 +374,7 @@ window.__photo = {
     // 10. Final render & freeze
     renderFrame();
     if (spec.dialogue) {
-      hud.showDialogue('NPC', spec.dialogue);
+      hud.showDialogue(spec.dialogue.name || spec.dialogue.speaker, spec.dialogue.text);
     }
     isSimFrozen = true;
   }
