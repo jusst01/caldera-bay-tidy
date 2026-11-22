@@ -6,7 +6,7 @@ import { buildCity, createRNG, groundHeight, districtAt, collideCircle, eject, s
 import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageVehicle } from './vehicles.js';
 import { spawnTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian } from './pedestrians.js';
-import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray } from './police.js';
+import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock } from './police.js';
 import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, WEAPON_SPECS } from './combat.js';
 import { createEconomy, SHOP_POS, PRICES, TIME_TRIALS } from './economy.js';
 import { createMissions, JOBS } from './missions.js';
@@ -464,6 +464,8 @@ window.__calderaTest = {
   driveToward: (x, z) => { console.log('Drive toward:', x, z); },
   interactables: () => interactables,
   interact: () => handleInteractPress(),
+  stageCover: () => stageCover(),
+  coverAudit: () => coverAudit(),
   save: canonicalSave()
 };
 
