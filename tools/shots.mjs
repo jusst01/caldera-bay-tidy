@@ -35,42 +35,70 @@ server.listen(0, '127.0.0.1', async () => {
         const shots = [
             {
                 name: 'screenshots/cover.png',
-                load: {seed:14, save:'canonical', mode:'drive', job:7, jobStage:0, police:160, dialogue:{speaker:'MARA VOSS', text:'Last one, wheelman. Bring it home clean.'}, event:'JOB 7 STARTED — THE LONG FAREWELL'},
+                load: {seed:14, save:'canonical', mode:'drive', job:7, jobStage:0, heat:160, dialogue:{speaker:'MARA VOSS', text:'Last one, wheelman. Bring it home clean.'}, event:'JOB 7 STARTED — THE LONG FAREWELL'},
                 gate: async (page) => {
                     await page.evaluate(() => window.__calderaTest.stageCover());
                     await new Promise(r => setTimeout(r, 2000));
-                    return { unitsInside: true, cash: true, rep: true };
+                    return await page.evaluate(() => {
+                        const audit = window.__calderaTest.coverAudit();
+                        const text = document.body.innerText;
+                        console.log('__calderaTest:', Object.getOwnPropertyNames(window.__calderaTest));
+                        console.log('__calderaTest.state:', Object.getOwnPropertyNames(window.__calderaTest.state || {}));
+                        const police = window.__calderaTest.state.heat;
+                        return {
+                            auditEntries: audit.filter(e => e.sx >= 8 && e.sx <= 92 && e.sy >= 18 && e.sy <= 88).length >= 2,
+                            textMatch: text.includes('$4,210') && text.includes('REP 520') && text.includes('JOB 7/8'),
+                            dispatch: dispatch.split('\n').length >= 3,
+                            police: police === 160
+                        };
+                    });
                 }
             },
             {
                 name: 'screenshots/gameplay-1.png',
-                load: {seed:31, save:'canonical', mode:'foot', job:1, jobStage:1},
+                load: {seed:31, save:'canonical', mode:'foot', job:5, jobStage:0, heat:30, dialogue:{name:'IRIS', text:'Bring me that SIRENA, Tavo. Quick and quiet.'}},
                 gate: async (page) => {
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
-                        return { onFoot: true, objective: true };
+                        const text = document.body.innerText;
+                        const peds = window.__calderaTest.getPedsNearby(25);
+                        return {
+                            textMatch: text.includes('STEAL') && text.includes('Bring me that SIRENA'),
+                            peds: peds.length >= 4,
+                            onFoot: window.__calderaTest.isPlayerOnFoot()
+                        };
                     });
                 }
             },
             {
                 name: 'screenshots/gameplay-2.png',
-                load: {seed:12, screen:'garage'},
+                load: {seed:12, screen:'garage', save:'canonical'},
                 gate: async (page) => {
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
-                        const garageEl = document.getElementById('screen-root');
-                        return { garage: !!garageEl && garageEl.style.display !== 'none' && garageEl.textContent.includes("IRIS'S GARAGE") };
+                        const el = document.getElementById('screen-root');
+                        const text = el?.innerText || '';
+                        const priceMatches = (text.match(/\$\d+/g) || []).length;
+                        return {
+                            visible: !!el && el.style.display !== 'none',
+                            textMatch: text.includes("IRIS'S GARAGE") && text.includes('CHOP CATALOG'),
+                            prices: priceMatches >= 6
+                        };
                     });
                 }
             },
             {
                 name: 'screenshots/gameplay-3.png',
-                load: {seed:5, screen:'start'},
+                load: {seed:5, screen:'start', save:'canonical'},
                 gate: async (page) => {
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
-                        const startEl = document.getElementById('screen-root');
-                        return { start: !!startEl && startEl.style.display !== 'none' && startEl.textContent.includes("YOUR RISE") };
+                        const el = document.getElementById('screen-root');
+                        const text = el?.innerText || '';
+                        return {
+                            visible: !!el && el.style.display !== 'none',
+                            textMatch: text.includes('YOUR RISE') && text.includes('CITY TAKEOVER 3/5') && text.includes('AUTOSAVE ON · SLOT 1 · 14:32') && text.includes('CARS STOLEN 41')
+                        };
                     });
                 }
             }
@@ -89,7 +117,7 @@ server.listen(0, '127.0.0.1', async () => {
                console.log(shot.name, "Results:", results);
                if (!Object.values(results).every(v => v === true)) {
                    console.error(`Failed gates for ${shot.name}`, results);
-                   continue;
+                   process.exit(1);
                }
             }
 

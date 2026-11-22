@@ -6,7 +6,7 @@ import { buildCity, createRNG, groundHeight, districtAt, collideCircle, eject, s
 import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageVehicle } from './vehicles.js';
 import { spawnTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian } from './pedestrians.js';
-import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock, setPoints, spawnUnit, getPoliceUnits } from './police.js';
+import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock, setPoints, spawnUnit, getPoliceUnits, getPoints } from './police.js';
 import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, WEAPON_SPECS, getAmmo } from './combat.js';
 import { createEconomy, SHOP_POS, PRICES, TIME_TRIALS } from './economy.js';
 import { createMissions, JOBS } from './missions.js';
@@ -387,6 +387,7 @@ function stepSim(dt) {
   hud.update({
     player,
     heat: getHeat(),
+    points: getPoints(),
     police: { units: getPoliceUnits({ x: player.x, z: player.z }) },
     cash: save.cash,
     rep: save.rep,
@@ -428,61 +429,42 @@ window.__photo = {
     if (spec.job !== undefined) {
       const jobIdx = spec.job - 1;
       save.missionIndex = jobIdx;
-      if (spec.stage !== undefined) missions.forceStage(jobIdx, spec.stage);
+      if (spec.jobStage !== undefined) missions.forceStage(jobIdx, spec.jobStage);
     }
 
-    // HUD Update
-    player.ammo = getAmmo().current;
-    hud.update({
-      player,
-      heat: getHeat(),
-      police: { units: getPoliceUnits({ x: player.x, z: player.z }) },
-      cash: save.cash,
-      rep: save.rep,
-      tier: tierFor(save.rep),
-      takeoverCount: takeoverCount(save),
-      jobsDone: save.jobsDone,
-      objective: missions.currentObjective()
-    });
-
-    if (spec.mode === 'drive') {
-      const car = spawnVehicle('zorro', -300, 300, 0, scene);
-      player.inCar = car;
-      player.x = -300; player.z = 300;
-      // Spawn police for heat
-      const heatLevel = getHeat();
-      const targetCount = [0, 2, 4, 6, 8, 10][heatLevel];
-      for (let i = 0; i < targetCount; i++) {
-        spawnUnit({x: player.x, z: player.z});
-      }
-      stageCover(camera, {x: player.x, z: player.z});
-      hud.setPanels('cover');
-    } else {
-      player.inCar = null;
-      player.x = -300; player.z = 300; player.y = groundHeight(-300, 300);
-      hud.setPanels('game');
-    }
-
-    if (spec.screen === 'garage') {
-      hud.setPanels('garage');
-      openGarageScreen(save, garageCallbacks);
-    } else if (spec.screen === 'start') {
-      hud.setPanels('start');
-      openStartScreen(save, { onContinue: () => {}, onNewGame: () => {} });
-    }
+    // Apply Armour / HP
+    player.armour = save.armour || 0;
+    player.hp = 100;
 
     if (spec.mode === 'drive') {
       camera.position.set(-300, 3.5, 308); camera.lookAt(-300, 1.0, 300);
     } else {
       camera.position.set(-300, player.y + 2.2, player.z + 6.0); camera.lookAt(-300, player.y + 1.2, player.z);
     }
+
+    // Final HUD Update
+    player.ammo = getAmmo().current;
+    hud.update({
+      player,
+      heat: getHeat(),
+      points: getPoints(),
+      police: { units: getPoliceUnits({ x: player.x, z: player.z }) },
+      cash: save.cash,
+      rep: save.rep,
+      tier: tierFor(save.rep),
+      takeoverCount: takeoverCount(save),
+      jobsDone: save.jobsDone,
+      objective: missions.currentObjective(),
+      dialogue: spec.dialogue,
+      eventLine: spec.event
+    });
   },
   capture() {
     renderer.render(scene, camera);
     return renderer.domElement.toDataURL('image/png');
   },
   state() {
-    return { cash: save.cash, rep: save.rep, heat: getHeat(), missionIndex: save.missionIndex, playerPos: { x: player.x, z: player.z } };
+    return { cash: save.cash, rep: save.rep, heat: getHeat(), points: getPoints(), missionIndex: save.missionIndex, playerPos: { x: player.x, z: player.z } };
   }
 };
 
@@ -567,6 +549,7 @@ function logGameState() {
         cash: save.cash,
         rep: save.rep,
         heat: getHeat(),
+    points: getPoints(),
         playerPos: {x: player.x, z: player.z}
     });
 }

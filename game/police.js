@@ -59,6 +59,10 @@ export function getHeat() {
   return 0;
 }
 
+export function getPoints() {
+  return points;
+}
+
 export function respray() {
   points = 0;
   clearUnits();

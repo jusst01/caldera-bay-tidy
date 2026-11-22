@@ -153,7 +153,7 @@ export function createHud(hooks) {
 
   function renderMissionPanel(objective) {
     if (objective) {
-      missionPanel.innerHTML = `<h3>JOB ${objective.missionIndex + 1}/8 — ${objective.jobLabel}</h3><p>${objective.objective}</p>`;
+      missionPanel.innerHTML = `<h3>JOB ${objective.missionIndex}/8 — ${objective.jobLabel}</h3><p>${objective.objective}</p>`;
       missionPanel.style.display = 'block';
     } else {
       missionPanel.style.display = 'none';
@@ -168,11 +168,11 @@ export function createHud(hooks) {
     }
   }
 
-  function renderTopRight(heat, cash, tier) {
+  function renderTopRight(heat, cash, rep, tier) {
     heatCashTierPanel.innerHTML = `
       <div class="heat">Heat: ${'★'.repeat(heat || 0)}</div>
       <div class="cash">${formatMoney(cash || 0)}</div>
-      <div class="tier">REP: ${tier || 0} | Tier: ${tier || 0}</div>
+      <div class="tier">REP ${rep || 0} · ${tier || 'NEWBIE'}</div>
     `;
   }
 
@@ -207,7 +207,7 @@ export function createHud(hooks) {
 
   function renderDialogue(dialogue) {
     if (dialogue) {
-      dialogueCard.innerHTML = `<h3>${dialogue.name}</h3><p>${dialogue.text}</p>`;
+      dialogueCard.innerHTML = `<h3>${dialogue.name || dialogue.speaker}</h3><p>${dialogue.text}</p>`;
       dialogueCard.style.display = 'block';
     } else if (currentMode !== 'cover') {
       dialogueCard.style.display = 'none';
@@ -246,7 +246,7 @@ export function createHud(hooks) {
     update(snapshot) {
       renderMissionPanel(snapshot.objective);
       renderDispatchPanel(snapshot.police?.units || []);
-      renderTopRight(snapshot.heat, snapshot.cash, snapshot.tier);
+      renderTopRight(snapshot.heat, snapshot.cash, snapshot.rep, snapshot.tier);
       renderTakeover(snapshot.takeoverCount);
       renderStatus(snapshot.player);
       renderMinimap(snapshot.player, snapshot.police);
