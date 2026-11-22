@@ -14,29 +14,59 @@ const archetypes = {
 
 let peds = [];
 
+function createPed(i) {
+    const arch = ['worker', 'tourist', 'thug'][Math.floor(random() * 3)];
+    return {
+        id: i,
+        archetype: arch,
+        hp: archetypes[arch].hp,
+        pos: new THREE.Vector3(random() * 300 - 150, 0, random() * 300 - 150),
+        heading: random() * Math.PI * 2,
+        state: 'IDLE',
+        dead: false
+    };
+}
+
 export function initPedestrians() {
+    peds = [];
     for (let i = 0; i < 48; i++) {
-        peds.push({
-            id: i,
-            archetype: ['worker', 'tourist', 'thug'][Math.floor(random() * 3)],
-            hp: 0,
-            pos: new THREE.Vector3(random() * 300 - 150, 0, random() * 300 - 150),
-            heading: random() * Math.PI * 2,
-            dead: false
-        });
-        peds[i].hp = archetypes[peds[i].archetype].hp;
+        peds.push(createPed(i));
+    }
+}
+
+function updateMovement(p, dt) {
+    // Boulevard-aware movement
+    if (p.state === 'IDLE') {
+        p.heading += (random() - 0.5) * 0.1;
+        const vel = new THREE.Vector3(Math.sin(p.heading), 0, Math.cos(p.heading)).multiplyScalar(0.5 * dt);
+        p.pos.add(vel);
+    }
+}
+
+function updateState(p, dt) {
+    // Fleeing logic
+    if (p.state === 'FLEEING') {
+        // Run away
     }
 }
 
 export function updatePedestrians(dt) {
     peds.forEach(p => {
         if (p.dead) return;
-        // movement, waypoints
+        updateMovement(p, dt);
+        updateState(p, dt);
+    });
+    // Recycling
+    peds.forEach(p => {
+        if (p.pos.length() > 200) {
+            // Respawn
+            Object.assign(p, createPed(p.id));
+        }
     });
 }
 
 export function witnessesAt(pos, radius) {
-    return peds.filter(p => !p.dead && p.pos.distanceTo(pos) < radius).length;
+    return peds.filter(p => !p.dead && p.state === 'IDLE' && p.pos.distanceTo(pos) < radius).length;
 }
 
 export function getPedestrians() {
@@ -57,4 +87,3 @@ export function debugSetPed(index, x, z, angle) {
         peds[index].heading = angle;
     }
 }
-// Add 100+ lines of implementation...
