@@ -5,7 +5,7 @@ import * as THREE from './three.module.min.js';
 import { buildCity, createRNG, groundHeight, districtAt, collideCircle, eject, setFinaleDusk } from './city.js';
 import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageVehicle } from './vehicles.js';
 import { spawnTraffic, updateTraffic, getTrafficCars } from './traffic.js';
-import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian } from './pedestrians.js';
+import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian, debugSetPed } from './pedestrians.js';
 import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock, setPoints, spawnUnit, getPoliceUnits, getPoints } from './police.js';
 import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, WEAPON_SPECS, getAmmo } from './combat.js';
 import { createEconomy, SHOP_POS, PRICES, TIME_TRIALS } from './economy.js';
@@ -428,7 +428,7 @@ window.__photo = {
     if (spec.jobsDone !== undefined) save.jobsDone = spec.jobsDone;
     if (spec.job !== undefined) {
       const jobIdx = spec.job;
-      save.missionIndex = jobIdx;
+      save.missionIndex = jobIdx - 1;
       if (spec.jobStage !== undefined) missions.forceStage(jobIdx, spec.jobStage);
     }
 
@@ -453,6 +453,13 @@ window.__photo = {
       player.inCar = null;
       player.x = -300; player.z = 300; player.y = groundHeight(-300, 300);
       hud.setPanels('game');
+      // Stage pedestrians nearby
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2;
+        const x = player.x + Math.cos(angle) * 5;
+        const z = player.z + Math.sin(angle) * 5;
+        debugSetPed(i, x, z, angle);
+      }
     }
 
     // 2. SCREEN OPENING
@@ -517,6 +524,10 @@ window.__calderaTest = {
   interactables: () => interactables,
   interact: () => handleInteractPress(),
   stageCover: () => stageCover(camera, {x: player.x, z: player.z}),
+  getPedsNearby: (r) => {
+    return getPedestrians().filter(p => Math.hypot(player.x - p.x, player.z - p.z) < r);
+  },
+  isPlayerOnFoot: () => !player.inCar,
   coverAudit: () => coverAudit(camera),
   dumpScene: () => {
     const list = [];
