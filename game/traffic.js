@@ -2,12 +2,7 @@ import * as THREE from './three.module.min.js';
 import { spawnVehicle, updateVehicle } from './vehicles.js';
 
 let trafficCars = [];
-let seed = 12345;
-
-function seededRandom() {
-  seed = (seed * 16807) % 2147483647;
-  return (seed - 1) / 2147483646;
-}
+let rng = Math.random;
 
 const laneGraph = [
   {id: 0, x: 0, z: 0, next: [1, 2]},
@@ -17,11 +12,12 @@ const laneGraph = [
   {id: 4, x: 200, z: 200, next: [3]}
 ];
 
-export function initTraffic(scene) {
+export function initTraffic(scene, _rng) {
   trafficCars = [];
+  rng = _rng || Math.random;
   for (let i = 0; i < 24; i++) {
-    const node = laneGraph[Math.floor(seededRandom() * laneGraph.length)];
-    const car = spawnVehicle('colibri', node.x + 3.4, node.z, seededRandom() * Math.PI * 2, scene);
+    const node = laneGraph[Math.floor(rng() * laneGraph.length)];
+    const car = spawnVehicle('colibri', node.x + 3.4, node.z, rng() * Math.PI * 2, scene);
     car.node = node;
     car.lastNode = null;
     trafficCars.push(car);
@@ -55,7 +51,7 @@ export function updateTraffic(dt) {
     if (Math.abs(car.x - (car.node.x + 3.4)) < 5 && Math.abs(car.z - car.node.z) < 5) {
       let nextOptions = car.node.next.filter(id => id !== (car.lastNode ? car.lastNode.id : -1));
       if (nextOptions.length === 0) nextOptions = car.node.next;
-      const nextId = nextOptions[Math.floor(seededRandom() * nextOptions.length)];
+      const nextId = nextOptions[Math.floor(rng() * nextOptions.length)];
       car.lastNode = car.node;
       car.node = laneGraph.find(n => n.id === nextId);
       car.angle = Math.atan2((car.node.x + 3.4) - car.x, car.node.z - car.z);
