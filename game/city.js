@@ -20,13 +20,17 @@ const districts = [
 ];
 
 function groundHeight(x, z) {
-  const dx = x / 600;
-  const dz = z / 600;
-  const dist = Math.sqrt(dx * dx + dz * dz);
-  let h = Math.max(0, dist * 50 - 5);
-  if (z < -300) h += Math.pow((z + 300) / 200, 2) * 50;
-  if (x > 200 && z > 200) h += 20;
-  return h;
+  const dz = z + 500;
+  const dist = Math.sqrt(x * x + dz * dz);
+
+  let h = (Math.sin(x/100) + Math.cos(z/100)) * 0.5;
+
+  // Rise only near the volcano
+  if (dist > 500) {
+      h += Math.pow((dist - 500) / 1000, 6) * 400;
+  }
+
+  return Math.max(0, h);
 }
 
 function districtAt(x, z) {
