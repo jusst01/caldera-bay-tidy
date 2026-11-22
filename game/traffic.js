@@ -47,6 +47,13 @@ export function initTraffic(scene, rng) {
 }
 
 /**
+ * Spawns/rebuilds the civilian traffic fleet on the lane graph.
+ */
+export function spawnTraffic(scene, rng) {
+  return initTraffic(scene, rng);
+}
+
+/**
  * Updates traffic cars along lane graph: handles slow-for-car-ahead, node routing
  * (straight-preferred node choice, no U-turns), obstacle avoidance, and cleanup.
  */
