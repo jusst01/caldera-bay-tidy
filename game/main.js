@@ -268,7 +268,7 @@ window.__photo = {
 };
 
 window.__calderaTest = {
-  state: () => ({ player, save, heat: getHeat(), missionState, units: getUnits(), peds: getPedestrians() }),
+  state: () => ({ player, save, heat: getHeat(), heatPoints: getHeatPoints(), missionState, units: getUnits(), peds: getPedestrians() }),
   hash: () => computeStateHash(),
   project: (x, y, z) => {
     const v = new THREE.Vector3(x, y, z);
@@ -1089,7 +1089,7 @@ window.__photo = {
 };
 
 window.__calderaTest = {
-  state: () => ({ player, save, heat: getHeat(), missionState, units: getUnits(), peds: getPedestrians() }),
+  state: () => ({ player, save, heat: getHeat(), heatPoints: getHeatPoints(), missionState, units: getUnits(), peds: getPedestrians() }),
   hash: () => computeStateHash(),
   project: (x, y, z) => {
     const v = new THREE.Vector3(x, y, z);
