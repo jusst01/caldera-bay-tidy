@@ -237,16 +237,18 @@ function updateSim(dt) {
 
 function renderFrame() {
   // Camera update
-  if (player.inCar) {
-    const car = player.inCar;
-    const offset = new THREE.Vector3(0, 3.5, -8).applyQuaternion(car.quaternion || new THREE.Quaternion());
-    camera.position.copy(car.position || new THREE.Vector3()).add(offset);
-    camera.lookAt(car.position?.clone().add(new THREE.Vector3(0, 1, 0)) || new THREE.Vector3());
-  } else {
-    const targetPos = new THREE.Vector3(player.x, player.y + 1.5, player.z);
-    const camOffset = new THREE.Vector3(Math.sin(player.angle) * -6, 2.2, Math.cos(player.angle) * -6);
-    camera.position.copy(targetPos).add(camOffset);
-    camera.lookAt(targetPos);
+  if (!isSimFrozen) {
+    if (player.inCar) {
+      const car = player.inCar;
+      const offset = new THREE.Vector3(0, 3.5, -8).applyQuaternion(car.quaternion || new THREE.Quaternion());
+      camera.position.copy(car.position || new THREE.Vector3()).add(offset);
+      camera.lookAt(car.position?.clone().add(new THREE.Vector3(0, 1, 0)) || new THREE.Vector3());
+    } else {
+      const targetPos = new THREE.Vector3(player.x, player.y + 1.5, player.z);
+      const camOffset = new THREE.Vector3(Math.sin(player.angle) * -6, 2.2, Math.cos(player.angle) * -6);
+      camera.position.copy(targetPos).add(camOffset);
+      camera.lookAt(targetPos);
+    }
   }
 
   renderer.render(scene, camera);
@@ -257,7 +259,7 @@ function renderFrame() {
     player: {
       hp: player.hp,
       armour: player.armour,
-      ammo: getAmmo().current,
+      ammo: Number.isFinite(getAmmo().current) ? getAmmo().current : 0,
       inCar: !!player.inCar,
       x: player.x,
       z: player.z,
@@ -332,6 +334,11 @@ window.__photo = {
       for (let i = 0; i < packCount; i++) {
         spawnUnit(-300 + (Math.random() - 0.5) * 10, 300 + (Math.random() - 0.5) * 10);
       }
+      // Pose camera before stageCover
+      camera.position.set(player.x, player.y + 3.5, player.z + 8);
+      camera.lookAt(player.x, player.y + 1.0, player.z);
+      camera.updateMatrixWorld();
+
       stageCover(camera, new THREE.Vector3(-300, player.y, 300));
       hud.setPanels('cover');
     } else if (spec.mode === 'foot') {
@@ -339,6 +346,11 @@ window.__photo = {
       player.x = -300;
       player.z = 300;
       player.y = groundHeight(-300, 300);
+
+      // Pose camera here
+      camera.position.set(player.x, player.y + 2.2, player.z + 6);
+      camera.lookAt(player.x, player.y + 1.0, player.z);
+      camera.updateMatrixWorld();
 
       const pedOffsets = [{x: 3, z: 2}, {x: -4, z: 5}, {x: 6, z: -3}, {x: -2, z: -6}, {x: 8, z: 6}];
       for (let i = 0; i < 5; i++) {
@@ -358,25 +370,16 @@ window.__photo = {
       openMenu(save, { onResume() { closeCurrentScreen(); } });
     }
 
-    // 8. Camera
-    if (spec.mode === 'drive') {
-      camera.position.set(player.x, player.y + 3.5, player.z + 8);
-      camera.lookAt(player.x, player.y + 1.0, player.z);
-    } else if (spec.mode === 'foot') {
-      camera.position.set(player.x, player.y + 2.2, player.z + 6);
-      camera.lookAt(player.x, player.y + 1.0, player.z);
-    }
-
     // 9. Dialogue / Event queues
     dialogueQueue = spec.dialogue || null;
     eventLineQueue = spec.event || null;
 
     // 10. Final render & freeze
+    isSimFrozen = true;
     renderFrame();
     if (spec.dialogue) {
       hud.showDialogue(spec.dialogue.name || spec.dialogue.speaker, spec.dialogue.text);
     }
-    isSimFrozen = true;
   }
 };
 
