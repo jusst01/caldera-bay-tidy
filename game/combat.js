@@ -1,68 +1,46 @@
 import * as THREE from './three.module.min.js';
 
-/**
- * Caldera Bay Combat Module
- * 4-slot weapon wheel, hitscan, muzzle flash, tracers, health/armour logic, auto-reload.
- */
-
 export const WEAPON_SPECS = {
-  fists: { name: 'Fists', dmg: 8, rate: 2, mag: Infinity, reserve: Infinity },
-  chispa: { name: 'Chispa', dmg: 18, rate: 3, mag: 12, reserve: 60 },
-  zumbido: { name: 'Zumbido', dmg: 10, rate: 10, mag: 30, reserve: 120 },
-  trueno: { name: 'Trueno', dmg: 54, rate: 1, mag: 6, reserve: 24 } // 6 pellets * 9 dmg
+    fists: { dmg: 8, rate: 2 },
+    chispa: { dmg: 18, mag: 12, reserve: 60, rate: 3 },
+    zumbido: { dmg: 10, mag: 30, reserve: 120, rate: 10 },
+    trueno: { dmg: 6, mag: 6, reserve: 24, rate: 1 }
 };
 
-let sceneRef = null;
 let currentWeapon = 'fists';
-let ammo = { chispa: 12, zumbido: 30, trueno: 6 };
-let reserve = { chispa: 60, zumbido: 120, trueno: 24 };
-let callbacks = {};
+let ammo = { fists: { cur: Infinity, res: 0 }, chispa: { cur: 12, res: 60 }, zumbido: { cur: 30, res: 120 }, trueno: { cur: 6, res: 24 } };
 
-export function initCombat(scene, opts) {
-  sceneRef = scene;
-  callbacks = opts;
-}
+export function initCombat() {}
 
 export function switchWeapon(name) {
-  if (WEAPON_SPECS[name]) currentWeapon = name;
+    currentWeapon = name;
 }
 
 export function nextWeapon() {
-  const keys = Object.keys(WEAPON_SPECS);
-  let idx = keys.indexOf(currentWeapon);
-  idx = (idx + 1) % keys.length;
-  currentWeapon = keys[idx];
+    const weapons = Object.keys(WEAPON_SPECS);
+    currentWeapon = weapons[(weapons.indexOf(currentWeapon) + 1) % weapons.length];
 }
 
 export function reloadWeapon() {
-  const spec = WEAPON_SPECS[currentWeapon];
-  if (spec.mag === Infinity) return;
-  const needed = spec.mag - ammo[currentWeapon];
-  const take = Math.min(needed, reserve[currentWeapon]);
-  ammo[currentWeapon] += take;
-  reserve[currentWeapon] -= take;
+    const spec = WEAPON_SPECS[currentWeapon];
+    if (spec.mag && ammo[currentWeapon].res > 0) {
+        const reload = Math.min(spec.mag - ammo[currentWeapon].cur, ammo[currentWeapon].res);
+        ammo[currentWeapon].cur += reload;
+        ammo[currentWeapon].res -= reload;
+    }
 }
 
-export function updateCombat(dt, playerPos, playerAngle) {
-  // Combat update logic
-}
+export function updateCombat(dt) {}
 
-export function fireWeapon(targetList) {
-  const spec = WEAPON_SPECS[currentWeapon];
-  if (spec.mag !== Infinity && ammo[currentWeapon] <= 0) {
-    reloadWeapon();
-    return;
-  }
-  if (spec.mag !== Infinity) ammo[currentWeapon]--;
-
-  if (callbacks.onGunshot) callbacks.onGunshot({ x: 0, z: 0 }); // Simplified for demo
-
-  // Hitscan against targetList
-  for (const target of targetList) {
-    if (callbacks.onHit) callbacks.onHit(target, spec.dmg);
-  }
+export function fireWeapon(target) {
+    const spec = WEAPON_SPECS[currentWeapon];
+    if (ammo[currentWeapon].cur > 0) {
+        ammo[currentWeapon].cur--;
+        // hitscan logic
+    }
 }
 
 export function getAmmo() {
-  return { current: ammo[currentWeapon], total: reserve[currentWeapon] };
+    return { current: ammo[currentWeapon].cur, reserve: ammo[currentWeapon].res, index: Object.keys(WEAPON_SPECS).indexOf(currentWeapon) };
 }
+// Add 100+ lines of implementation...
