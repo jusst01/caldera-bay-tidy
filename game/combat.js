@@ -62,3 +62,7 @@ export function fireWeapon(targetList) {
     if (callbacks.onHit) callbacks.onHit(target, spec.dmg);
   }
 }
+
+export function getAmmo() {
+  return { current: ammo[currentWeapon], total: reserve[currentWeapon] };
+}

@@ -7,7 +7,7 @@ import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageV
 import { spawnTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian } from './pedestrians.js';
 import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock, setPoints, spawnUnit, getPoliceUnits } from './police.js';
-import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, WEAPON_SPECS } from './combat.js';
+import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, WEAPON_SPECS, getAmmo } from './combat.js';
 import { createEconomy, SHOP_POS, PRICES, TIME_TRIALS } from './economy.js';
 import { createMissions, JOBS } from './missions.js';
 import { loadSave, saveSave, canonicalSave, emptySave, tierFor, takeoverCount } from './save.js';
@@ -66,7 +66,8 @@ let player = {
   speed: 0,
   inCar: null, // vehicle object if driving
   hp: 100,
-  armour: save.armour || 0
+  armour: save.armour || 0,
+  ammo: getAmmo().current
 };
 
 let interactables = [];
@@ -382,10 +383,11 @@ function stepSim(dt) {
   updateCombat(dt, { x: player.x, z: player.z }, player.angle);
 
   // Update HUD display components
+  player.ammo = getAmmo().current;
   hud.update({
     player,
     heat: getHeat(),
-    police: { units: getPoliceUnits() },
+    police: { units: getPoliceUnits({ x: player.x, z: player.z }) },
     cash: save.cash,
     rep: save.rep,
     tier: tierFor(save.rep),
@@ -430,10 +432,11 @@ window.__photo = {
     }
 
     // HUD Update
+    player.ammo = getAmmo().current;
     hud.update({
       player,
       heat: getHeat(),
-      police: { units: getPoliceUnits() },
+      police: { units: getPoliceUnits({ x: player.x, z: player.z }) },
       cash: save.cash,
       rep: save.rep,
       tier: tierFor(save.rep),
@@ -461,8 +464,10 @@ window.__photo = {
     }
 
     if (spec.screen === 'garage') {
+      hud.setPanels('garage');
       openGarageScreen(save, garageCallbacks);
     } else if (spec.screen === 'start') {
+      hud.setPanels('start');
       openStartScreen(save, { onContinue: () => {}, onNewGame: () => {} });
     }
 

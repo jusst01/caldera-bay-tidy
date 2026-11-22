@@ -187,7 +187,7 @@ export function buildCity(scene, rng) {
           else fCtx.fillStyle = '#FFE9B0';
           fCtx.fillRect(c * cw + 4, r * ch + 4, cw - 8, ch - 8);
         } else {
-          fCtx.fillStyle = '#1A1A1A';
+          fCtx.fillStyle = '#444444';
           fCtx.fillRect(c * cw + 4, r * ch + 4, cw - 8, ch - 8);
         }
       }

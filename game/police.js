@@ -180,7 +180,11 @@ export function coverAudit(camera) {
   });
 }
 
-export function getPoliceUnits() {
-  return policeUnits.map(u => ({ name: u.name, tactic: u.tactic, dist: u.dist }));
+export function getPoliceUnits(playerPos) {
+  return policeUnits.map(u => ({
+    name: u.name,
+    tactic: u.tactic,
+    dist: Math.hypot(u.x - playerPos.x, u.z - playerPos.z)
+  }));
 }
 
