@@ -189,7 +189,7 @@ window.__photo = {
       save.cash = 4210;
       save.rep = 520;
       save.missionIndex = spec.job !== undefined ? spec.job : 7;
-      save.jobsDone = spec.job !== undefined ? Math.max(0, spec.job) : 6;
+      save.jobsDone = 6;
     } else if (spec && spec.save && typeof spec.save === 'object') {
       Object.assign(save, spec.save);
     }
@@ -206,24 +206,33 @@ window.__photo = {
     }
 
     if (spec && spec.mode === 'drive') {
-      const startPos = (spec.job !== undefined && JOBS[spec.job]) ? JOBS[spec.job].startPos : { x: -200, z: 200 };
-      const validPos = findStreetPosition(startPos.x, startPos.z);
-      const carSpec = (spec.job !== undefined && JOBS[spec.job] && JOBS[spec.job].stages) ? (JOBS[spec.job].stages.find(s => s.spec)?.spec || 'zorro') : 'zorro';
+      const spawnPos = { x: -300, z: 300 }; // Muelle spawn boulevard
+      const validPos = findStreetPosition(spawnPos.x, spawnPos.z);
+      const carSpec = (spec.job !== undefined && JOBS[spec.job] && JOBS[spec.job].stages) ? (JOBS[spec.job].stages.find(s => s.spec)?.spec || 'relampago') : 'relampago';
       const car = spawnVehicle(carSpec, validPos.x, validPos.z, 0, scene);
-      car.speed = 18; // ~65 km/h
+      car.speed = 25; // ~90 km/h
       player.x = car.x;
       player.z = car.z;
       player.y = car.y;
       player.isDriving = true;
       player.currentVehicle = car;
+
+      const camDist = 7.5;
+      const camHeight = 2.8;
+      camera.position.set(car.x - Math.sin(0) * camDist, car.y + 1.2 + camHeight, car.z - Math.cos(0) * camDist);
+      camera.lookAt(car.x, car.y + 1.2, car.z);
     } else if (spec && spec.mode === 'foot') {
       player.isDriving = false;
       player.currentVehicle = null;
-      const startPos = (spec.job !== undefined && JOBS[spec.job]) ? JOBS[spec.job].startPos : { x: -150, z: 150 };
-      const validPos = findStreetPosition(startPos.x, startPos.z);
+      const stageCar = missionsContext ? missionsContext.stageCar() : null;
+      const basePos = stageCar ? { x: stageCar.x + 1.5, z: stageCar.z } : { x: -250, z: 250 };
+      const validPos = findStreetPosition(basePos.x, basePos.z);
       player.x = validPos.x;
       player.z = validPos.z;
       player.y = groundHeight(player.x, player.z);
+
+      camera.position.set(player.x, player.y + 2.0, player.z + 4.5);
+      camera.lookAt(player.x, player.y + 1.0, player.z);
     }
 
     if (spec && spec.heat !== undefined) {
@@ -886,7 +895,6 @@ function updateHudDisplay() {
 
   let promptText = null;
   let minDist = 2.2;
-  if (!window.__photoActive) {
     for (const item of interactables) {
       const dx = player.x - item.pos.x;
       const dz = player.z - item.pos.z;
@@ -898,7 +906,6 @@ function updateHudDisplay() {
         }
       }
     }
-  }
 
   // Mission steal car prompt ("E — STEAL")
   if (missionsContext && missionsContext.jobActive() && !player.isDriving) {

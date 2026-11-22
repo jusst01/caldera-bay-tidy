@@ -160,7 +160,7 @@ server.listen(0, '127.0.0.1', async () => {
           const oz = -4 - i * 1.0;
           window.__calderaTest.debugSetPed('worker', px + ox, pz + oz, 0);
         }
-        window.__calderaTest.step(0.1);
+        for (let i = 0; i < 5; i++) window.__calderaTest.step(0.1);
       }
     });
     await new Promise(r => setTimeout(r, 1000));
@@ -176,7 +176,7 @@ server.listen(0, '127.0.0.1', async () => {
       const weaponWheelOpen = !!document.getElementById('hud-weapon-wheel');
       const peds = window.__calderaTest.state().peds || [];
       const projections = peds.map(p => ({ ...window.__calderaTest.project(p.x, 0, p.z) }));
-      return { objLine, promptLine, jobsLine, jobLine, onFoot, weaponWheelOpen, projections };
+      return { objLine, promptLine, jobsLine, jobLine, onFoot, weaponWheelOpen, projections, player: st.player };
     });
 
     console.log('Audit Shot 2:', audit2);

@@ -23,16 +23,16 @@ export const JOBS = [
   },
   {
     id: 1,
-    title: "Paseo Pursuit",
-    district: "paseo",
-    cash: 700,
-    rep: 75,
-    repGate: 100,
-    startPos: { x: 330, z: 60 },
+    title: "Dockside Delivery",
+    district: "muelle",
+    cash: 500,
+    rep: 60,
+    repGate: 0,
+    startPos: { x: -300, z: 300 },
     stages: [
-      { verb: 'STEAL_CAR', spec: 'corsario', at: { x: 280, z: 100 } },
-      { verb: 'SHOOTOUT', at: { x: 350, z: 0 }, count: 3 },
-      { verb: 'DRIVE_TO', at: { x: 400, z: 120 } }
+      { verb: 'DRIVE_TO', at: { x: -200, z: 200 } },
+      { verb: 'STEAL_CAR', spec: 'sirena', at: { x: -250, z: 250 } },
+      { verb: 'DELIVER', at: { x: -50, z: 200 }, radius: 10, needCar: true }
     ]
   },
   {

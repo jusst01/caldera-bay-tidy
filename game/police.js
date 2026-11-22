@@ -118,13 +118,13 @@ export function stageCover(cameraPos, cameraDir) {
   const rightX = -fwdZ;
   const rightZ = fwdX;
 
-  // Front pair ahead of camera at 10m with ±8.5m lateral
-  const aheadX = cameraPos.x + fwdX * 10;
-  const aheadZ = cameraPos.z + fwdZ * 10;
+  // Front pair ahead of camera at 8m with ±4m lateral, plus one further ahead at 12m
+  const aheadX = cameraPos.x + fwdX * 8;
+  const aheadZ = cameraPos.z + fwdZ * 8;
 
-  const u1 = spawnVehicle('fenix', aheadX + rightX * 8.5, aheadZ + rightZ * 8.5, Math.atan2(fwdX, fwdZ), sceneRef);
-  const u2 = spawnVehicle('fenix', aheadX - rightX * 8.5, aheadZ - rightZ * 8.5, Math.atan2(fwdX, fwdZ), sceneRef);
-  const u3 = spawnVehicle('fenix', aheadX + rightX * 2.0, aheadZ + rightZ * 2.0, Math.atan2(fwdX, fwdZ), sceneRef);
+  const u1 = spawnVehicle('fenix', aheadX + rightX * 4.0, aheadZ + rightZ * 4.0, Math.atan2(fwdX, fwdZ), sceneRef);
+  const u2 = spawnVehicle('fenix', aheadX - rightX * 4.0, aheadZ - rightZ * 4.0, Math.atan2(fwdX, fwdZ), sceneRef);
+  const u3 = spawnVehicle('fenix', cameraPos.x + fwdX * 12, cameraPos.z + fwdZ * 12, Math.atan2(fwdX, fwdZ), sceneRef);
 
   u1.name = DISPATCH_NAMES[0];
   u2.name = DISPATCH_NAMES[1];
