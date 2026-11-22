@@ -8,6 +8,9 @@ import { initTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian, debugSetPed } from './pedestrians.js';
 import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, damagePlayer, getCombatState, showWeaponWheel } from './combat.js';
 import { initPolice, reportCrime, setPointsFloor, respray, getHeat, getHeatPoints, getUnits, forceRoadblock, stageCover, coverAudit, updatePolice } from './police.js';
+import { loadSave, storeSave, tierFor, takeoverCount, canonicalSave } from './save.js';
+import { createMissions, JOBS } from './missions.js';
+import { createEconomy, SHOP_POS } from './economy.js';
 
 // Seeded PRNG (Mulberry32)
 let currentSeed = 1337;
@@ -23,20 +26,7 @@ function mulberry32(seed) {
 let rng = mulberry32(currentSeed);
 
 // Canonical Save State
-let save = {
-  cash: 4210,
-  rep: 520,
-  repTitle: 'FIXER',
-  jobs: '6/8',
-  mission: '7 active',
-  takeover: '3/5',
-  autosave: '14:32',
-  stolen: 41,
-  topSpeed: 247,
-  maxHeat: 5,
-  ammo: 100,
-  health: 100
-};
+let save = loadSave();
 
 export function gatherSave() {
   return { ...save };
@@ -44,9 +34,7 @@ export function gatherSave() {
 
 export function persistSave() {
   if (window.__photoActive) return;
-  try {
-    localStorage.setItem('caldera_bay_save', JSON.stringify(save));
-  } catch (e) {}
+  storeSave(save);
 }
 
 // Game State & World
@@ -169,6 +157,34 @@ function init() {
 
   player.y = groundHeight(player.x, player.z);
 
+  missionsContext = createMissions({
+    scene,
+    player,
+    save,
+    notify,
+    dialogue,
+    registerInteractable,
+    damagePlayer: (dmg) => {
+      const dead = damagePlayer(dmg);
+      if (dead) {
+        if (missionsContext) missionsContext.onPlayerDown();
+        onBustedOrWasted(false);
+      }
+    },
+    missionActive: () => missionsContext ? missionsContext.jobActive() : false
+  });
+  missionsContext.armJobStart();
+
+  economyContext = createEconomy({
+    scene,
+    player,
+    save,
+    notify,
+    dialogue,
+    registerInteractable,
+    missionActive: () => missionsContext ? missionsContext.jobActive() : false
+  });
+
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -185,6 +201,11 @@ function init() {
     }
     if (e.key === 'r' || e.key === 'R') {
       reloadWeapon();
+    }
+    if (e.key === 'F5') {
+      e.preventDefault();
+      storeSave(save);
+      notify(`GAME SAVED (${save.lastSaveClock})`, 2500);
     }
     if (e.key === '1') switchWeapon(0);
     if (e.key === '2') switchWeapon(1);
@@ -413,6 +434,9 @@ function fixedUpdate(dt) {
     }
   }
 
+  if (missionsContext) missionsContext.update(dt, playerPos, player.isDriving ? player.currentVehicle : null);
+  if (economyContext) economyContext.update(dt, playerPos);
+
   updateHudDisplay();
 }
 
@@ -427,18 +451,21 @@ function updateHudDisplay() {
   const promptEl = document.getElementById('hud-prompt');
 
   if (cashEl) cashEl.textContent = `CASH: $${save.cash.toLocaleString()}`;
-  if (repEl) repEl.textContent = `REP: ${save.rep} (${save.repTitle})`;
+  if (repEl) repEl.textContent = `REP: ${save.rep} (${tierFor(save.rep)})`;
   if (heatEl) {
     const heatVal = getHeat();
     const stars = '★'.repeat(heatVal) + '☆'.repeat(5 - heatVal);
     heatEl.textContent = `HEAT: ${stars}`;
   }
-  if (missionEl) missionEl.textContent = missionState.name;
+  if (missionEl) {
+    const obj = missionsContext ? missionsContext.currentObjective() : null;
+    missionEl.textContent = obj ? `MISSION: ${obj.jobLabel}` : `MISSION: ${save.missionIndex}/8`;
+  }
   if (districtEl) {
     const distId = districtAt(player.x, player.z).toUpperCase();
     districtEl.textContent = `DISTRICT: ${distId}`;
   }
-  if (autosaveEl) autosaveEl.textContent = `AUTOSAVE ${save.autosave}`;
+  if (autosaveEl) autosaveEl.textContent = `AUTOSAVE ${save.lastSaveClock || '14:32'}`;
 
   if (speedEl) {
     const speedKmh = player.isDriving && player.currentVehicle ? Math.round(Math.abs(player.currentVehicle.speed) * 3.6) : 0;
@@ -595,7 +622,7 @@ window.__calderaTest = {
   onFootLoop: () => {
     if (player.isDriving) exitVehicle();
   },
-  modules: ['main.js', 'city.js', 'vehicles.js', 'traffic.js', 'pedestrians.js', 'combat.js', 'police.js'],
+  modules: ['main.js', 'city.js', 'vehicles.js', 'traffic.js', 'pedestrians.js', 'combat.js', 'police.js', 'save.js', 'missions.js', 'economy.js'],
   step: (dt) => { fixedUpdate(dt || 1/60); renderFrame(); },
   teleport: (x, z) => {
     player.x = x;
