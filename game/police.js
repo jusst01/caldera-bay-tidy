@@ -133,6 +133,20 @@ export function stageCover(cameraPos, cameraDir) {
   u2.tactic = 'PURSUIT';
   u3.tactic = 'PURSUIT';
   units.push(u1, u2, u3);
+
+  const targetCount = heatLevel === 1 ? 2 : (heatLevel === 2 ? 4 : (heatLevel === 3 ? 6 : (heatLevel === 4 ? 8 : 10)));
+  while (units.length < targetCount) {
+    const idx = units.length;
+    const spawnAngle = (idx / targetCount) * Math.PI * 2;
+    const spawnDist = 45 + (idx * 6);
+    const sx = cameraPos.x + Math.sin(spawnAngle) * spawnDist;
+    const sz = cameraPos.z + Math.cos(spawnAngle) * spawnDist;
+    const type = (heatLevel === 5 && idx >= 8) ? 'perro' : 'fenix';
+    const vehicle = spawnVehicle(type, sx, sz, 0, sceneRef);
+    vehicle.name = DISPATCH_NAMES[idx % DISPATCH_NAMES.length];
+    vehicle.tactic = heatLevel >= 4 ? 'SPOTLIGHT' : 'PURSUIT';
+    units.push(vehicle);
+  }
 }
 
 export function coverAudit() {

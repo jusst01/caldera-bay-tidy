@@ -116,6 +116,19 @@ export function onBustedOrWasted(isBusted) {
   player.currentVehicle = null;
 }
 
+function findStreetPosition(targetX, targetZ) {
+  let x = targetX;
+  let z = targetZ;
+  let radius = 2.5;
+  let attempts = 0;
+  while (collideCircle(x, z, radius) && attempts < 30) {
+    x += 8;
+    z += 8;
+    attempts++;
+  }
+  return { x, z, y: groundHeight(x, z) };
+}
+
 window.__photo = {
   load(spec) {
     window.__photoActive = true;
@@ -128,6 +141,8 @@ window.__photo = {
     if (dialogueBox) dialogueBox.style.display = 'none';
     const notifyBox = document.getElementById('hud-notify');
     if (notifyBox) notifyBox.style.display = 'none';
+
+    showWeaponWheel(false);
 
     if (spec && typeof spec.seed === 'number') {
       currentSeed = spec.seed;
@@ -142,18 +157,48 @@ window.__photo = {
     initPedestrians(scene, rng);
     initPolice(scene);
 
+    missionsContext = createMissions({
+      scene,
+      player,
+      save,
+      notify,
+      dialogue,
+      registerInteractable,
+      damagePlayer: (dmg) => {
+        const dead = damagePlayer(dmg);
+        if (dead) {
+          if (missionsContext) missionsContext.onPlayerDown();
+          onBustedOrWasted(false);
+        }
+      },
+      missionActive: () => missionsContext ? missionsContext.jobActive() : false
+    });
+
+    economyContext = createEconomy({
+      scene,
+      player,
+      save,
+      notify,
+      dialogue,
+      registerInteractable,
+      missionActive: () => missionsContext ? missionsContext.jobActive() : false
+    });
+
     if (spec && spec.save === 'canonical') {
       save = canonicalSave();
       save.cash = 4210;
       save.rep = 520;
       save.missionIndex = spec.job !== undefined ? spec.job : 7;
-      save.jobsDone = spec.job !== undefined ? spec.job - 1 : 6;
+      save.jobsDone = spec.job !== undefined ? Math.max(0, spec.job) : 6;
     } else if (spec && spec.save && typeof spec.save === 'object') {
       Object.assign(save, spec.save);
     }
 
     if (spec && spec.job !== undefined) {
       missionState = { active: true, name: `MISSION: ${spec.job} active`, stage: spec.jobStage || 0 };
+      if (missionsContext) {
+        missionsContext.forceStage(spec.job, spec.jobStage || 0);
+      }
     }
 
     if (spec && spec.heat !== undefined) {
@@ -161,7 +206,10 @@ window.__photo = {
     }
 
     if (spec && spec.mode === 'drive') {
-      const car = spawnVehicle('zorro', -200, 200, 0, scene);
+      const startPos = (spec.job !== undefined && JOBS[spec.job]) ? JOBS[spec.job].startPos : { x: -200, z: 200 };
+      const validPos = findStreetPosition(startPos.x, startPos.z);
+      const carSpec = (spec.job !== undefined && JOBS[spec.job] && JOBS[spec.job].stages) ? (JOBS[spec.job].stages.find(s => s.spec)?.spec || 'zorro') : 'zorro';
+      const car = spawnVehicle(carSpec, validPos.x, validPos.z, 0, scene);
       car.speed = 18; // ~65 km/h
       player.x = car.x;
       player.z = car.z;
@@ -171,9 +219,16 @@ window.__photo = {
     } else if (spec && spec.mode === 'foot') {
       player.isDriving = false;
       player.currentVehicle = null;
-      player.x = -150;
-      player.z = 150;
+      const startPos = (spec.job !== undefined && JOBS[spec.job]) ? JOBS[spec.job].startPos : { x: -150, z: 150 };
+      const validPos = findStreetPosition(startPos.x, startPos.z);
+      player.x = validPos.x;
+      player.z = validPos.z;
       player.y = groundHeight(player.x, player.z);
+    }
+
+    if (spec && spec.heat !== undefined) {
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      stageCover(camera.position, fwd);
     }
 
     if (spec && spec.dialogue) {
@@ -831,19 +886,34 @@ function updateHudDisplay() {
 
   let promptText = null;
   let minDist = 2.2;
-  for (const item of interactables) {
-    const dx = player.x - item.pos.x;
-    const dz = player.z - item.pos.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist <= item.radius && dist < minDist) {
-      minDist = dist;
-      if (typeof item.label === 'function') {
-        promptText = item.label();
+  if (!window.__photoActive) {
+    for (const item of interactables) {
+      const dx = player.x - item.pos.x;
+      const dz = player.z - item.pos.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist <= item.radius && dist < minDist) {
+        minDist = dist;
+        if (typeof item.label === 'function') {
+          promptText = item.label();
+        }
       }
     }
   }
 
-  if (!promptText && !player.isDriving) {
+  // Mission steal car prompt ("E — STEAL")
+  if (missionsContext && missionsContext.jobActive() && !player.isDriving) {
+    const stageCar = missionsContext.stageCar();
+    if (stageCar) {
+      const dx = player.x - stageCar.x;
+      const dz = player.z - stageCar.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist <= 2.8) {
+        promptText = "E — STEAL";
+      }
+    }
+  }
+
+  if (!promptText && !player.isDriving && !window.__photoActive) {
     const trafficCars = getTrafficCars();
     for (const car of trafficCars) {
       const dx = player.x - car.x;
@@ -854,7 +924,7 @@ function updateHudDisplay() {
         break;
       }
     }
-  } else if (!promptText && player.isDriving) {
+  } else if (!promptText && player.isDriving && !window.__photoActive) {
     promptText = "Press E to Exit Vehicle";
   }
 
