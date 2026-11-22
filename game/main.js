@@ -116,6 +116,122 @@ export function onBustedOrWasted(isBusted) {
   player.currentVehicle = null;
 }
 
+window.__photo = {
+  load(spec) {
+    window.__photoActive = true;
+    screenActive = false;
+    closeCurrentScreen();
+
+    const titleOverlay = document.getElementById('title-overlay');
+    if (titleOverlay) titleOverlay.style.display = 'none';
+    const dialogueBox = document.getElementById('hud-dialogue');
+    if (dialogueBox) dialogueBox.style.display = 'none';
+    const notifyBox = document.getElementById('hud-notify');
+    if (notifyBox) notifyBox.style.display = 'none';
+
+    if (spec && typeof spec.seed === 'number') {
+      currentSeed = spec.seed;
+      rng = mulberry32(currentSeed);
+    }
+
+    while(scene.children.length > 0) {
+      scene.remove(scene.children[0]);
+    }
+    buildCity(scene, rng);
+    initTraffic(scene, rng);
+    initPedestrians(scene, rng);
+    initPolice(scene);
+
+    if (spec && spec.save === 'canonical') {
+      save = canonicalSave();
+      save.cash = 4210;
+      save.rep = 520;
+      save.missionIndex = spec.job !== undefined ? spec.job : 7;
+      save.jobsDone = spec.job !== undefined ? spec.job - 1 : 6;
+    } else if (spec && spec.save && typeof spec.save === 'object') {
+      Object.assign(save, spec.save);
+    }
+
+    if (spec && spec.job !== undefined) {
+      missionState = { active: true, name: `MISSION: ${spec.job} active`, stage: spec.jobStage || 0 };
+    }
+
+    if (spec && spec.heat !== undefined) {
+      setPointsFloor(spec.heat);
+    }
+
+    if (spec && spec.mode === 'drive') {
+      const car = spawnVehicle('zorro', -200, 200, 0, scene);
+      car.speed = 18; // ~65 km/h
+      player.x = car.x;
+      player.z = car.z;
+      player.y = car.y;
+      player.isDriving = true;
+      player.currentVehicle = car;
+    } else if (spec && spec.mode === 'foot') {
+      player.isDriving = false;
+      player.currentVehicle = null;
+      player.x = -150;
+      player.z = 150;
+      player.y = groundHeight(player.x, player.z);
+    }
+
+    if (spec && spec.dialogue) {
+      dialogue(spec.dialogue.speaker, spec.dialogue.text);
+    }
+    if (spec && spec.event) {
+      notify(spec.event);
+    }
+
+    if (spec && spec.screen === 'start') {
+      screenActive = true;
+      openStartScreen(save, {});
+    } else if (spec && spec.screen === 'garage') {
+      screenActive = true;
+      openGarageScreen(save, {});
+    }
+
+    updateHudDisplay();
+    renderFrame();
+  },
+  capture() {
+    if (!renderer) return '';
+    return renderer.domElement.toDataURL('image/jpeg', 0.9);
+  },
+  state() {
+    return {
+      seed: currentSeed,
+      hash: computeStateHash(),
+      player: { x: player.x, z: player.z, isDriving: player.isDriving },
+      save: gatherSave(),
+      heat: getHeat(),
+      missionState,
+      units: getUnits().map(u => ({ name: u.name, tactic: u.tactic, x: u.x, z: u.z, dist: Math.sqrt((player.x - u.x)**2 + (player.z - u.z)**2) })),
+      peds: getPedestrians().map(p => ({ x: p.x, z: p.z }))
+    };
+  }
+};
+
+window.__calderaTest = {
+  state: () => ({ player, save, heat: getHeat(), missionState, units: getUnits(), peds: getPedestrians() }),
+  hash: () => computeStateHash(),
+  project: (x, y, z) => {
+    const v = new THREE.Vector3(x, y, z);
+    v.project(camera);
+    const xPct = (v.x * 0.5 + 0.5) * 100;
+    const yPct = (-(v.y) * 0.5 + 0.5) * 100;
+    const inFrame = v.x >= -1 && v.x <= 1 && v.y >= -1 && v.y <= 1 && v.z < 1;
+    return { xPct, yPct, inFrame, ndcX: v.x, ndcY: v.y };
+  },
+  stageCover: () => {
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    stageCover(camera.position, fwd);
+  },
+  coverAudit,
+  debugSetPed,
+  step: (dt) => { fixedUpdate(dt || 1/60); renderFrame(); }
+};
+
 function init() {
   const canvas = document.getElementById('game');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -186,6 +302,8 @@ function init() {
     missionActive: () => missionsContext ? missionsContext.jobActive() : false
   });
 
+  window.updateHudDisplay = updateHudDisplay;
+
   registerShopInteractables();
   registerTrialInteractables();
 
@@ -248,28 +366,94 @@ function init() {
     }
   });
 
-  // Open START screen over frozen world
-  screenActive = true;
-  openStartScreen(save, {
-    onContinue: () => {
-      screenActive = false;
-      const titleOverlay = document.getElementById('title-overlay');
-      if (titleOverlay) titleOverlay.style.display = 'none';
-      notify("RESUMED: CITY ACTIVE", 2500);
-    },
-    onNewGame: () => {
-      clearSave();
-      save = canonicalSave();
-      save.cash = 250;
-      save.rep = 0;
-      save.missionIndex = 0;
-      save.jobsDone = 0;
-      screenActive = false;
-      const titleOverlay = document.getElementById('title-overlay');
-      if (titleOverlay) titleOverlay.style.display = 'none';
-      notify("NEW GAME STARTED", 3000);
+  // Query param auto-loading for screenshots
+  const urlParams = new URLSearchParams(window.location.search);
+  const shot = urlParams.get('shot');
+  const seedParam = urlParams.get('seed');
+  if (seedParam) {
+    currentSeed = parseInt(seedParam, 10);
+    rng = mulberry32(currentSeed);
+  }
+  if (shot === 'start') {
+    screenActive = true;
+    openStartScreen(save, {});
+  } else if (shot === 'end') {
+    screenActive = true;
+    openGarageScreen(save, {});
+  } else if (shot === 'play') {
+    if (currentSeed === 14) {
+      window.__photo.load({
+        seed: 14,
+        save: 'canonical',
+        mode: 'drive',
+        job: 7,
+        jobStage: 0,
+        heat: 160,
+        dialogue: { speaker: 'MARA VOSS', text: 'Last one, wheelman. Bring it home clean.' },
+        event: 'JOB 7 STARTED — THE LONG FAREWELL'
+      });
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      stageCover(camera.position, fwd);
+    } else if (currentSeed === 31) {
+      window.__photo.load({
+        seed: 31,
+        save: 'canonical',
+        mode: 'foot',
+        job: 1,
+        jobStage: 1
+      });
+      for (let i = 0; i < 6; i++) {
+        const offsetX = (i - 2.5) * 2.0;
+        const offsetZ = -8 - i * 1.5;
+        debugSetPed('worker', player.x + offsetX, player.z + offsetZ, 0);
+      }
+    } else {
+      screenActive = true;
+      openStartScreen(save, {
+        onContinue: () => {
+          screenActive = false;
+          const titleOverlay = document.getElementById('title-overlay');
+          if (titleOverlay) titleOverlay.style.display = 'none';
+          notify("RESUMED: CITY ACTIVE", 2500);
+        },
+        onNewGame: () => {
+          clearSave();
+          save = canonicalSave();
+          save.cash = 250;
+          save.rep = 0;
+          save.missionIndex = 0;
+          save.jobsDone = 0;
+          screenActive = false;
+          const titleOverlay = document.getElementById('title-overlay');
+          if (titleOverlay) titleOverlay.style.display = 'none';
+          notify("NEW GAME STARTED", 3000);
+        }
+      });
     }
-  });
+  } else {
+    // Open START screen over frozen world
+    screenActive = true;
+    openStartScreen(save, {
+      onContinue: () => {
+        screenActive = false;
+        const titleOverlay = document.getElementById('title-overlay');
+        if (titleOverlay) titleOverlay.style.display = 'none';
+        notify("RESUMED: CITY ACTIVE", 2500);
+      },
+      onNewGame: () => {
+        clearSave();
+        save = canonicalSave();
+        save.cash = 250;
+        save.rep = 0;
+        save.missionIndex = 0;
+        save.jobsDone = 0;
+        screenActive = false;
+        const titleOverlay = document.getElementById('title-overlay');
+        if (titleOverlay) titleOverlay.style.display = 'none';
+        notify("NEW GAME STARTED", 3000);
+      }
+    });
+  }
 
   lastTime = performance.now();
   requestAnimationFrame(mainLoop);
@@ -764,21 +948,45 @@ window.__photo = {
     initPedestrians(scene, rng);
     initPolice(scene);
 
-    if (spec && Array.isArray(spec.inputs)) {
-      for (const inp of spec.inputs) {
-        keys = inp.keys || {};
-        fixedUpdate(1/60);
-      }
+    if (spec && spec.save === 'canonical') {
+      save = canonicalSave();
+      save.cash = 4210;
+      save.rep = 520;
+      save.missionIndex = spec.job !== undefined ? spec.job : 7;
+      save.jobsDone = spec.job !== undefined ? spec.job - 1 : 6;
+    } else if (spec && spec.save && typeof spec.save === 'object') {
+      Object.assign(save, spec.save);
     }
 
-    if (spec && spec.state) {
-      if (spec.state.cash !== undefined) save.cash = spec.state.cash;
-      if (spec.state.rep !== undefined) save.rep = spec.state.rep;
-      if (spec.state.heat !== undefined) setPointsFloor(spec.state.heat * 30);
-      if (spec.state.mission !== undefined) missionState.name = spec.state.mission;
-      if (spec.state.x !== undefined) player.x = spec.state.x;
-      if (spec.state.z !== undefined) player.z = spec.state.z;
+    if (spec && spec.job !== undefined) {
+      missionState = { active: true, name: `MISSION: ${spec.job} active`, stage: spec.jobStage || 0 };
+    }
+
+    if (spec && spec.heat !== undefined) {
+      setPointsFloor(spec.heat);
+    }
+
+    if (spec && spec.mode === 'drive') {
+      const car = spawnVehicle('zorro', -200, 200, 0, scene);
+      car.speed = 18; // ~65 km/h
+      player.x = car.x;
+      player.z = car.z;
+      player.y = car.y;
+      player.isDriving = true;
+      player.currentVehicle = car;
+    } else if (spec && spec.mode === 'foot') {
+      player.isDriving = false;
+      player.currentVehicle = null;
+      player.x = -150;
+      player.z = 150;
       player.y = groundHeight(player.x, player.z);
+    }
+
+    if (spec && spec.dialogue) {
+      dialogue(spec.dialogue.speaker, spec.dialogue.text);
+    }
+    if (spec && spec.event) {
+      notify(spec.event);
     }
 
     if (spec && spec.screen === 'start') {
@@ -788,9 +996,6 @@ window.__photo = {
       screenActive = true;
       openGarageScreen(save, {});
     }
-
-    lastCallout = { text: 'PHOTO EVENT', age: 0.8 };
-    lastDialogue = { speaker: 'IRIS', text: 'Photo mode active.', age: 1.0 };
 
     updateHudDisplay();
     renderFrame();
@@ -803,62 +1008,34 @@ window.__photo = {
     return {
       seed: currentSeed,
       hash: computeStateHash(),
-      player: { x: player.x, z: player.z },
+      player: { x: player.x, z: player.z, isDriving: player.isDriving },
       save: gatherSave(),
-      heat: getHeat()
+      heat: getHeat(),
+      missionState,
+      units: getUnits().map(u => ({ name: u.name, tactic: u.tactic, x: u.x, z: u.z, dist: Math.sqrt((player.x - u.x)**2 + (player.z - u.z)**2) })),
+      peds: getPedestrians().map(p => ({ x: p.x, z: p.z }))
     };
   }
 };
 
 window.__calderaTest = {
-  state: () => ({ player, save, heat: getHeat(), missionState }),
+  state: () => ({ player, save, heat: getHeat(), missionState, units: getUnits(), peds: getPedestrians() }),
   hash: () => computeStateHash(),
-  driveTour: () => {
-    const trafficCars = getTrafficCars();
-    if (trafficCars.length > 0) {
-      enterVehicle(trafficCars[0]);
-    }
+  project: (x, y, z) => {
+    const v = new THREE.Vector3(x, y, z);
+    v.project(camera);
+    const xPct = (v.x * 0.5 + 0.5) * 100;
+    const yPct = (-(v.y) * 0.5 + 0.5) * 100;
+    const inFrame = v.x >= -1 && v.x <= 1 && v.y >= -1 && v.y <= 1 && v.z < 1;
+    return { xPct, yPct, inFrame, ndcX: v.x, ndcY: v.y };
   },
-  onFootLoop: () => {
-    if (player.isDriving) exitVehicle();
+  stageCover: () => {
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    stageCover(camera.position, fwd);
   },
-  modules: ['main.js', 'city.js', 'vehicles.js', 'traffic.js', 'pedestrians.js', 'combat.js', 'police.js', 'save.js', 'missions.js', 'economy.js', 'hud.js', 'radio.js', 'screens.js'],
-  step: (dt) => { fixedUpdate(dt || 1/60); renderFrame(); },
-  teleport: (x, z) => {
-    player.x = x;
-    player.z = z;
-    player.y = groundHeight(x, z);
-    if (player.isDriving && player.currentVehicle) {
-      player.currentVehicle.x = x;
-      player.currentVehicle.z = z;
-      player.currentVehicle.y = player.y;
-    }
-  },
-  spawnCar: (typeKey, x, z, angle, color) => spawnVehicle(typeKey, x, z, angle || 0, scene, color || 0x3366cc),
-  enterNearest: () => handleInteractPress(),
-  exitCar: () => exitVehicle(),
-  repairVehicle: () => {
-    if (player.isDriving && player.currentVehicle) {
-      player.currentVehicle.durability = 100;
-      player.currentVehicle.dead = false;
-    }
-  },
-  driveToward: (x, z) => {
-    if (player.isDriving && player.currentVehicle) {
-      const car = player.currentVehicle;
-      car.angle = Math.atan2(x - car.x, z - car.z);
-      car.speed = 15;
-    }
-  },
-  interactables: () => interactables,
-  interact: () => handleInteractPress(),
-  save: gatherSave(),
-  debugSetPed,
-  stageCover,
   coverAudit,
-  forceRoadblock,
-  setPointsFloor,
-  respray
+  debugSetPed,
+  step: (dt) => { fixedUpdate(dt || 1/60); renderFrame(); }
 };
 
 window.addEventListener('DOMContentLoaded', init);

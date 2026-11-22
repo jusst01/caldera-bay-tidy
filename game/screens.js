@@ -4,6 +4,7 @@
 import { REP_TIERS, tierFor, takeoverCount } from './save.js';
 import { VEHICLE_ROSTER } from './vehicles.js';
 import { JOBS } from './missions.js';
+import * as THREE from './three.module.min.js';
 
 let activeOverlay = null;
 
@@ -146,9 +147,9 @@ export function openGarageScreen(save, callbacks) {
       <!-- Centre: Turntable Staged Car -->
       <div style="flex:1; background:rgba(10,15,25,0.75); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:20px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
         <div style="font-size:32px; font-weight:900; color:#ffaa44; margin-bottom:8px;">TURNTABLE STAGE</div>
-        <div style="font-size:16px; color:#a0aec0; margin-bottom:20px;">Live 3D Inspection & Tuning</div>
-        <div style="width:200px; height:200px; border-radius:50%; border:2px dashed rgba(255,170,68,0.4); display:flex; align-items:center; justify-content:center; margin-bottom:20px; background:radial-gradient(circle, rgba(255,170,68,0.1) 0%, transparent 70%);">
-          <span style="font-size:48px;">🚗</span>
+        <div style="font-size:16px; color:#a0aec0; margin-bottom:12px;">Live 3D Inspection & Tuning</div>
+        <div style="width:200px; height:200px; border-radius:50%; border:2px dashed rgba(255,170,68,0.4); display:flex; align-items:center; justify-content:center; margin-bottom:16px; background:radial-gradient(circle, rgba(255,170,68,0.1) 0%, transparent 70%); overflow:hidden;">
+          <canvas id="garage-turntable-canvas" width="200" height="200" style="display:block; width:200px; height:200px; border-radius:50%;"></canvas>
         </div>
         <div style="font-size:14px; color:#cbd5e0;">Selected car active on turntable. Inspect durability and specs before deployment.</div>
       </div>
@@ -182,6 +183,45 @@ export function openGarageScreen(save, callbacks) {
 
   document.body.appendChild(overlay);
   activeOverlay = overlay;
+
+  // Turntable 3D render init
+  setTimeout(() => {
+    const canvasEl = document.getElementById('garage-turntable-canvas');
+    if (canvasEl && typeof THREE !== 'undefined') {
+      const sceneT = new THREE.Scene();
+      const cameraT = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+      cameraT.position.set(0, 2, 5);
+      cameraT.lookAt(0, 0, 0);
+      const rendererT = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
+      rendererT.setSize(200, 200);
+
+      const amb = new THREE.AmbientLight(0xffffff, 0.9);
+      sceneT.add(amb);
+      const dir = new THREE.DirectionalLight(0xffaa44, 1.2);
+      dir.position.set(5, 10, 5);
+      sceneT.add(dir);
+
+      const carGroup = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1.8, 0.8, 3.8),
+        new THREE.MeshStandardMaterial({ color: 0x3366cc, roughness: 0.3, metalness: 0.8 })
+      );
+      body.position.y = 0.4;
+      carGroup.add(body);
+      sceneT.add(carGroup);
+
+      let angle = 0;
+      function animT() {
+        angle += 0.015;
+        carGroup.rotation.y = angle;
+        rendererT.render(sceneT, cameraT);
+        if (document.body.contains(canvasEl)) {
+          requestAnimationFrame(animT);
+        }
+      }
+      requestAnimationFrame(animT);
+    }
+  }, 50);
 
   const backHandler = () => {
     closeCurrentScreen();
