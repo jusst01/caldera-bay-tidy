@@ -542,7 +542,7 @@ window.__calderaTest = {
         });
       }
     });
-    console.log('SCENE DUMP:', list);
+    console.log('SCENE DUMP:', JSON.stringify(list));
     return list;
   },
   save: canonicalSave()

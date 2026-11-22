@@ -14,19 +14,22 @@ function ensureScreenRoot() {
   if (!root) {
     root = document.createElement('div');
     root.id = 'screen-root';
-    Object.assign(root.style, {
-      position: 'fixed',
-      inset: '0',
-      zIndex: '100',
-      display: 'none',
-      background: '#0b0e14',
-      overflowY: 'auto',
-      color: '#fff',
-      fontFamily: 'sans-serif',
-      userSelect: 'none'
-    });
     document.body.appendChild(root);
   }
+  Object.assign(root.style, {
+    position: 'fixed',
+    left: '0',
+    top: '0',
+    width: '100%',
+    height: '100%',
+    zIndex: '10',
+    display: 'none',
+    background: '#0b0e14',
+    overflowY: 'auto',
+    color: '#fff',
+    fontFamily: 'sans-serif',
+    userSelect: 'none'
+  });
   return root;
 }
 
@@ -69,7 +72,7 @@ export function openStartScreen(save, callbacks = {}) {
     display: 'flex',
     width: '100%',
     minHeight: '100%',
-    background: 'radial-gradient(circle at 30% 30%, #1b263b 0%, #0b0e14 100%)',
+    background: '#0b0e14',
     padding: '40px',
     boxSizing: 'border-box',
     justifyContent: 'space-between',
