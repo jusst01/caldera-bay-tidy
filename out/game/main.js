@@ -231,8 +231,8 @@ window.__photo = {
       player.z = validPos.z;
       player.y = groundHeight(player.x, player.z);
 
-      camera.position.set(player.x, player.y + 2.0, player.z + 4.5);
-      camera.lookAt(player.x, player.y + 1.0, player.z);
+      camera.position.set(player.x, player.y + 1.5, player.z + 4.0);
+      camera.lookAt(player.x, player.y + 0.5, player.z);
     }
 
     if (spec && spec.heat !== undefined) {

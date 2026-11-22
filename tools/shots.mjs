@@ -155,10 +155,17 @@ server.listen(0, '127.0.0.1', async () => {
         const st = window.__calderaTest.state();
         const px = st.player.x;
         const pz = st.player.z;
+        const angle = st.player.angle;
+        const fwdX = Math.sin(angle);
+        const fwdZ = Math.cos(angle);
+        const rightX = Math.cos(angle);
+        const rightZ = -Math.sin(angle);
         for (let i = 0; i < 6; i++) {
-          const ox = (i - 2.5) * 1.5;
-          const oz = -4 - i * 1.0;
-          window.__calderaTest.debugSetPed('worker', px + ox, pz + oz, 0);
+          const spread = (i - 2.5) * 2.5;
+          const dist = 5 + i * 2.0;
+          const pedX = px + fwdX * dist + rightX * spread;
+          const pedZ = pz + fwdZ * dist + rightZ * spread;
+          window.__calderaTest.debugSetPed('worker', pedX, pedZ, 0);
         }
         for (let i = 0; i < 5; i++) window.__calderaTest.step(0.1);
       }

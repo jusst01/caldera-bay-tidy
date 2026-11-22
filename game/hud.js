@@ -398,6 +398,17 @@ export function createHud(hooks) {
       setVal('hud-radio-sub', `${snapshot.station.subtitle} (${snapshot.station.name})`);
     }
 
+    // Prompt
+    const promptPanel = document.getElementById('hud-panel-prompt');
+    if (promptPanel) {
+      if (snapshot.prompt) {
+        promptPanel.style.display = 'block';
+        promptPanel.textContent = snapshot.prompt;
+      } else {
+        promptPanel.style.display = 'none';
+      }
+    }
+
     // Dialogue card (7 sim seconds)
     const dialoguePanel = document.getElementById('hud-panel-dialogue');
     if (dialoguePanel) {
