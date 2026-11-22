@@ -6,7 +6,7 @@ import { buildCity, createRNG, groundHeight, districtAt, collideCircle, eject, s
 import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageVehicle } from './vehicles.js';
 import { spawnTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian } from './pedestrians.js';
-import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock } from './police.js';
+import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray, stageCover, coverAudit, forceRoadblock, setPoints } from './police.js';
 import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, WEAPON_SPECS } from './combat.js';
 import { createEconomy, SHOP_POS, PRICES, TIME_TRIALS } from './economy.js';
 import { createMissions, JOBS } from './missions.js';
@@ -412,16 +412,34 @@ window.__photo = {
     buildCity(scene, rng);
     initPolice(scene);
     initPedestrians(scene, rng);
+    // Apply save
+    if (spec.save === 'canonical') {
+      Object.assign(save, canonicalSave());
+    } else if (spec.save) {
+      Object.assign(save, spec.save);
+    }
     if (spec.cash !== undefined) save.cash = spec.cash;
     if (spec.rep !== undefined) save.rep = spec.rep;
-    if (spec.heat !== undefined) setPointsFloor(spec.heat * 30);
-    if (spec.save) save = { ...save, ...spec.save };
+    if (spec.heat !== undefined) setPoints(spec.heat);
     if (spec.jobsDone !== undefined) save.jobsDone = spec.jobsDone;
     if (spec.job !== undefined) {
       const jobIdx = spec.job - 1;
       save.missionIndex = jobIdx;
       if (spec.stage !== undefined) missions.forceStage(jobIdx, spec.stage);
     }
+
+    // HUD Update
+    hud.update({
+      player,
+      heat: getHeat(),
+      cash: save.cash,
+      rep: save.rep,
+      tier: tierFor(save.rep),
+      takeoverCount: takeoverCount(save),
+      jobsDone: save.jobsDone,
+      objective: missions.currentObjective()
+    });
+
     if (spec.mode === 'drive') {
       const car = spawnVehicle('zorro', -300, 300, 0, scene);
       player.inCar = car;

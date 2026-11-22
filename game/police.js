@@ -47,6 +47,8 @@ export function reportCrime(type, pos, isPlayer) {
 
 export function setPointsFloor(f) { pointsFloor = f; }
 
+export function setPoints(p) { points = p; }
+
 export function getHeat() {
   if (points >= 150) return 5;
   if (points >= 100) return 4;
