@@ -4,7 +4,7 @@
 import * as THREE from './three.module.min.js';
 import { buildCity, createRNG, groundHeight, districtAt, collideCircle, eject, setFinaleDusk } from './city.js';
 import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageVehicle } from './vehicles.js';
-import { spawnTraffic, updateTraffic } from './traffic.js';
+import { spawnTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian } from './pedestrians.js';
 import { initPolice, reportCrime, setPointsFloor, updatePolice, getHeat, respray } from './police.js';
 import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, WEAPON_SPECS } from './combat.js';
@@ -244,6 +244,21 @@ function handleInteractPress() {
   }
   if (!player.inCar) {
     // Attempt carjack / enter nearest car
+    const traffic = getTrafficCars();
+    let nearestVehicle = null;
+    let minDist = 2.5;
+    for (const v of traffic) {
+      const dist = Math.hypot(player.x - v.x, player.z - v.z);
+      if (dist < minDist) {
+        minDist = dist;
+        nearestVehicle = v;
+      }
+    }
+    if (nearestVehicle) {
+      player.inCar = nearestVehicle;
+      notify("Entered vehicle", 1500);
+      reportCrime('carjack', { x: player.x, z: player.z }, true);
+    }
   } else {
     player.inCar = null;
     notify("Exited vehicle", 1500);
@@ -340,6 +355,18 @@ function stepSim(dt) {
       player.x = ejected.x;
       player.z = ejected.z;
       player.y = groundHeight(player.x, player.z);
+
+      // Run-over check
+      const peds = getPedestrians();
+      for (const ped of peds) {
+        if (!ped.down && Math.hypot(player.x - ped.x, player.z - ped.z) < 1.0) {
+          ped.down = true;
+          ped.group.rotation.x = Math.PI / 2;
+          reportCrime('pedHit', { x: player.x, z: player.z }, true);
+          // Slow down player
+          player.speed *= 0.5;
+        }
+      }
     }
   }
 
