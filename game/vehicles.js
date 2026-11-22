@@ -65,8 +65,14 @@ export function spawnVehicle(id, x, z, heading, scene) {
   };
 }
 
-export function updateVehicle(v, dt) {
+export function updateVehicle(v, dt, controls = null, obstacles = []) {
   if (v.dead) return;
+
+  if (controls) {
+    v.engineForce = controls.throttle * 2000;
+    v.brake = controls.handbrake ? 2 : (controls.throttle === 0 ? 0.5 : 0);
+  }
+
   const forward = new THREE.Vector3(Math.sin(v.angle), 0, Math.cos(v.angle));
   const drag = v.speed * 0.1;
   const totalForce = (v.engineForce - (v.brake * v.speed * 5) - drag);
@@ -74,8 +80,24 @@ export function updateVehicle(v, dt) {
   const lateralVelocity = v.velocity.clone().projectOnPlane(forward);
   v.velocity.add(forward.multiplyScalar(v.speed * dt));
   v.velocity.sub(lateralVelocity.multiplyScalar(v.grip * dt));
+
+  if (controls) {
+    v.angle -= controls.steer * 0.05 * (v.speed / 100);
+  }
+
   v.x += v.velocity.x;
   v.z += v.velocity.z;
+
+  // Collision detection
+  for (const obs of obstacles) {
+    const dx = v.x - obs.x;
+    const dz = v.z - obs.z;
+    if (dx * dx + dz * dz < (1.5 + obs.radius) ** 2) {
+      v.speed *= -0.5;
+      v.velocity.multiplyScalar(-0.5);
+    }
+  }
+
   v.y = getGroundHeight(v.x, v.z);
   v.mesh.position.set(v.x, v.y, v.z);
   v.mesh.rotation.y = v.angle;
