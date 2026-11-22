@@ -427,7 +427,7 @@ window.__photo = {
     if (spec.heat !== undefined) setPoints(spec.heat);
     if (spec.jobsDone !== undefined) save.jobsDone = spec.jobsDone;
     if (spec.job !== undefined) {
-      const jobIdx = spec.job - 1;
+      const jobIdx = spec.job;
       save.missionIndex = jobIdx;
       if (spec.jobStage !== undefined) missions.forceStage(jobIdx, spec.jobStage);
     }
@@ -436,13 +436,42 @@ window.__photo = {
     player.armour = save.armour || 0;
     player.hp = 100;
 
+    // 1. MODE STAGING
+    if (spec.mode === 'drive') {
+      const car = spawnVehicle('zorro', -300, 300, 0, scene);
+      player.inCar = car;
+      player.x = -300; player.z = 300;
+      // Spawn police for heat
+      const heatLevel = getHeat();
+      const targetCount = [0, 2, 4, 6, 8, 10][heatLevel];
+      for (let i = 0; i < targetCount; i++) {
+        spawnUnit({x: player.x, z: player.z});
+      }
+      stageCover(camera, {x: player.x, z: player.z});
+      hud.setPanels('cover');
+    } else {
+      player.inCar = null;
+      player.x = -300; player.z = 300; player.y = groundHeight(-300, 300);
+      hud.setPanels('game');
+    }
+
+    // 2. SCREEN OPENING
+    if (spec.screen === 'garage') {
+      hud.setPanels('garage');
+      openGarageScreen(save, garageCallbacks);
+    } else if (spec.screen === 'start') {
+      hud.setPanels('start');
+      openStartScreen(save, { onContinue: () => {}, onNewGame: () => {} });
+    }
+
+    // 3. CAMERA POSE
     if (spec.mode === 'drive') {
       camera.position.set(-300, 3.5, 308); camera.lookAt(-300, 1.0, 300);
     } else {
       camera.position.set(-300, player.y + 2.2, player.z + 6.0); camera.lookAt(-300, player.y + 1.2, player.z);
     }
 
-    // Final HUD Update
+    // 4. Final HUD Update
     player.ammo = getAmmo().current;
     hud.update({
       player,
