@@ -1,312 +1,217 @@
 import * as THREE from './three.module.min.js';
 
-let sceneRef = null;
-let crimePoints = 0;
-let pointsFloor = 0;
-let heatLevel = 0;
-let units = [];
-let roadblocks = [];
-let searchTimer = 0;
-let isSearching = false;
-let roadblockTimer = 0;
-let bustedTimer = 0;
-let halconMesh = null;
+let _seed = 42;
+function seededRandom() {
+  _seed = (_seed * 9301 + 49297) % 233280;
+  return _seed / 233280;
+}
 
 const SURNAMES = [
-    'Peralta', 'Mendoza', 'Campos', 'Rocha', 'Silva',
-    'Vance', 'Reyes', 'Cruz', 'Ortiz', 'Vega',
-    'Gomez', 'Santos', 'Navarro', 'Rios', 'Medina'
+  'Silva', 'Rojas', 'Mendoza', 'Vargas', 'Morales', 'Paredes', 'Castillo',
+  'Ortega', 'Medina', 'Rios', 'Guzman', 'Campos', 'Navarro', 'Soto', 'Cruz'
+];
+const FIRST_NAMES = [
+  'Lt. Ramirez', 'Ofc. Gomez', 'Sgt. Perez', 'Det. Flores', 'Ofc. Torres',
+  'Insp. Diaz', 'Ofc. Ruiz', 'Sgt. Castro', 'Ofc. Ortiz', 'Det. Rubio'
 ];
 
-let surnameIndex = 0;
-function getNextSurname() {
-    const name = SURNAMES[surnameIndex % SURNAMES.length];
-    surnameIndex++;
-    return `U${Math.floor(10 + Math.random() * 89)} "${name.toUpperCase()}"`;
+const CRIME_POINTS = {
+  carjack: 10,
+  pedHit: 15,
+  mug: 15,
+  gunshot: 5,
+  copKill: 40,
+  policeCarSteal: 40
+};
+
+let points = 0;
+let pointsFloor = 0;
+let units = [];
+let searchTimer = 0;
+let isSearching = false;
+let isBusted = false;
+let roadblockActive = false;
+
+export function initPolice() {
+  points = 0;
+  pointsFloor = 0;
+  units = [];
+  searchTimer = 0;
+  isSearching = false;
+  isBusted = false;
+  roadblockActive = false;
 }
 
-export function initPolice(scene) {
-    sceneRef = scene;
-    crimePoints = 0;
-    pointsFloor = 0;
-    heatLevel = 0;
-    units = [];
-    roadblocks = [];
-    searchTimer = 0;
-    isSearching = false;
-    roadblockTimer = 0;
-    bustedTimer = 0;
-}
-
-export function reportCrime(crimeType, pos) {
-    let pts = 0;
-    if (crimeType === 'carjack') pts = 10;
-    else if (crimeType === 'ped_hit') pts = 15;
-    else if (crimeType === 'mug') pts = 15;
-    else if (crimeType === 'gunshot') pts = 5;
-    else if (crimeType === 'cop_kill') pts = 40;
-    else if (crimeType === 'police_car_steal') pts = 40;
-
-    crimePoints = Math.max(pointsFloor, crimePoints + pts);
-    updateHeatLevel();
+export function reportCrime(crimeType) {
+  const pts = CRIME_POINTS[crimeType] || 10;
+  points = Math.min(200, points + pts);
+  isSearching = false;
+  searchTimer = 0;
 }
 
 export function setPointsFloor(floor) {
-    pointsFloor = floor;
-    if (crimePoints < pointsFloor) {
-        crimePoints = pointsFloor;
-        updateHeatLevel();
-    }
+  pointsFloor = Math.max(0, floor);
+  points = Math.max(points, pointsFloor);
 }
 
-export function setPoints(pts) {
-    crimePoints = Math.max(pointsFloor, pts);
-    updateHeatLevel();
+export function setPoints(val) {
+  points = Math.max(pointsFloor, Math.min(200, val));
 }
 
 export function getHeat() {
-    return heatLevel;
+  if (points >= 150) return 5;
+  if (points >= 100) return 4;
+  if (points >= 60) return 3;
+  if (points >= 30) return 2;
+  if (points >= 10) return 1;
+  return 0;
 }
 
 export function getPoints() {
-    return crimePoints;
+  return points;
 }
 
-function updateHeatLevel() {
-    if (crimePoints >= 150) heatLevel = 5;
-    else if (crimePoints >= 100) heatLevel = 4;
-    else if (crimePoints >= 60) heatLevel = 3;
-    else if (crimePoints >= 30) heatLevel = 2;
-    else if (crimePoints >= 10) heatLevel = 1;
-    else heatLevel = 0;
+export function getHeatPoints() {
+  return points;
 }
 
 export function respray() {
-    crimePoints = pointsFloor;
-    heatLevel = 0;
-    units = [];
-    roadblocks = [];
-    isSearching = false;
+  points = 0;
+  pointsFloor = 0;
+  units = [];
+  isSearching = false;
+  searchTimer = 0;
+  roadblockActive = false;
 }
 
-export function forceRoadblock(pos, heading) {
-    roadblocks.push({
-        x: pos.x + Math.cos(heading) * 15,
-        z: pos.z + Math.sin(heading) * 15,
-        heading: heading,
-        active: true,
-        createdAt: Date.now()
-    });
+export function forceRoadblock() {
+  roadblockActive = true;
 }
 
-export function spawnUnit(type, pos) {
-    if (!sceneRef) return;
-    const name = getNextSurname();
-    const group = new THREE.Group();
-    const carMat = new THREE.MeshLambertMaterial({ color: 0x112255 });
-    const carGeo = new THREE.BoxGeometry(2.0, 1.2, 4.5);
-    const car = new THREE.Mesh(carGeo, carMat);
-    car.position.y = 0.6;
-    group.add(car);
-
-    // Add siren/spotlight
-    const lightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const lightGeo = new THREE.SphereGeometry(0.2, 4, 4);
-    const siren = new THREE.Mesh(lightGeo, lightMat);
-    siren.position.set(0, 1.3, 0);
-    group.add(siren);
-
-    group.position.set(pos.x + (Math.random() - 0.5) * 40, 0, pos.z + (Math.random() - 0.5) * 40);
-    sceneRef.add(group);
-
-    units.push({
-        name: name,
-        mesh: group,
-        type: type || 'cruiser',
-        tactic: 'PURSUIT',
-        speed: 18.0 + (Math.random() * 2),
-        hp: 100
-    });
+export function getUnits() {
+  return units;
 }
 
-// Internal function to check for busted state
-function checkBusted(playerPos, playerInVehicle) {
-    if (playerInVehicle) {
-        // Car disabled + 2 units within 8m for 3s
-        // (Simplified for this skeleton structure)
-        return false;
+export function spawnUnit(type = 'cruiser') {
+  const first = FIRST_NAMES[Math.floor(seededRandom() * FIRST_NAMES.length)];
+  const last = SURNAMES[units.length % SURNAMES.length];
+  const name = `${first} ${last}`;
+
+  const rx = (Math.floor(seededRandom() * 10) - 5) * 20;
+  const rz = (Math.floor(seededRandom() * 10) - 5) * 20;
+
+  const unit = {
+    name,
+    type,
+    tactic: 'PURSUIT',
+    x: rx,
+    y: 0,
+    z: rz,
+    vx: 0,
+    vz: 0,
+    speed: 0
+  };
+  units.push(unit);
+  return unit;
+}
+
+export function updatePolice(dt, playerPos) {
+  const heat = getHeat();
+
+  let targetCount = 0;
+  if (heat === 1) targetCount = 2;
+  else if (heat === 2) targetCount = 4;
+  else if (heat === 3) targetCount = 6;
+  else if (heat === 4) targetCount = 8;
+  else if (heat >= 5) targetCount = 10;
+
+  while (units.length < targetCount) {
+    const isVan = (heat >= 5 && units.length >= 8);
+    spawnUnit(isVan ? 'van' : 'cruiser');
+  }
+  while (units.length > targetCount) {
+    units.pop();
+  }
+
+  units.forEach((u, idx) => {
+    if (heat >= 4) u.tactic = 'SPOTLIGHT';
+    else if (heat >= 3) u.tactic = 'RAMMING';
+    else if (heat >= 2) u.tactic = 'BOX-IN';
+    else u.tactic = 'PURSUIT';
+
+    if (playerPos) {
+      const dx = playerPos.x - u.x;
+      const dz = playerPos.z - u.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist > 3) {
+        const speed = 12 + heat * 2;
+        u.x += (dx / dist) * speed * dt;
+        u.z += (dz / dist) * speed * dt;
+      }
+    }
+  });
+
+  if (heat === 0 && points > 0) {
+    if (!isSearching) {
+      isSearching = true;
+      searchTimer = 15;
     } else {
-        // Cop within 3m on foot 2s
-        for (const u of units) {
-            const dist = u.mesh.position.distanceTo(playerPos);
-            if (dist < 3) {
-                bustedTimer += 0.016; // Assuming 60fps
-                if (bustedTimer >= 2.0) return true;
-                return false;
-            }
-        }
-        bustedTimer = 0;
+      searchTimer -= dt;
+      if (searchTimer <= 0) {
+        points = Math.max(0, points - dt * 10);
+      }
     }
-    return false;
-}
-
-export function updatePolice(dt, playerPos, playerVel, playerInVehicle, isShooting) {
-    if (!sceneRef) return;
-
-    let targetCount = 0;
-    if (heatLevel === 1) targetCount = 2;
-    else if (heatLevel === 2) targetCount = 4;
-    else if (heatLevel === 3) targetCount = 6;
-    else if (heatLevel === 4) targetCount = 8;
-    else if (heatLevel >= 5) targetCount = 10;
-
-    while (units.length < targetCount) {
-        spawnUnit('cruiser', playerPos);
-    }
-    while (units.length > targetCount && units.length > 0) {
-        const u = units.pop();
-        if (u && u.mesh) sceneRef.remove(u.mesh);
-    }
-
-    for (let i = 0; i < units.length; i++) {
-        const u = units[i];
-        const dx = playerPos.x - u.mesh.position.x;
-        const dz = playerPos.z - u.mesh.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        u.dist = dist;
-
-        if (heatLevel >= 4) u.tactic = 'SPOTLIGHT';
-        else if (heatLevel >= 3 && dist < 15) u.tactic = 'RAMMING';
-        else if (heatLevel >= 2) u.tactic = 'BOX-IN';
-        else u.tactic = 'PURSUIT';
-
-        if (dist > 5) {
-            const moveStep = u.speed * dt;
-            u.mesh.position.x += (dx / dist) * moveStep;
-            u.mesh.position.z += (dz / dist) * moveStep;
-            u.mesh.position.y = 0;
-            u.mesh.rotation.y = Math.atan2(dx, dz);
-        }
-    }
-
-    if (heatLevel >= 3) {
-        roadblockTimer += dt;
-        if (roadblockTimer >= 45) {
-            roadblockTimer = 0;
-            forceRoadblock(playerPos, 0);
-        }
-    }
-
-    if (heatLevel > 0 && !isShooting) {
-        if (!isSearching) {
-            isSearching = true;
-            searchTimer = 10.0;
-        } else {
-            searchTimer -= dt;
-            if (searchTimer <= 0) {
-                const drainRate = playerInVehicle ? 3 : 4;
-                crimePoints = Math.max(pointsFloor, crimePoints - drainRate * dt);
-                updateHeatLevel();
-            }
-        }
-    } else if (isShooting) {
-        isSearching = false;
-    }
-
-    if (checkBusted(playerPos, playerInVehicle)) {
-        // Trigger Busted state logic
-        console.log("Player Busted!");
-    }
+  }
 }
 
 export function getPoliceUnits(playerPos) {
-    return units.map(u => ({
-        name: u.name,
-        tactic: u.tactic,
-        dist: playerPos ? Math.hypot(u.mesh.position.x - playerPos.x, u.mesh.position.z - playerPos.z) : (u.dist || 0)
-    }));
+  return units.map(u => {
+    const dx = playerPos ? playerPos.x - u.x : 0;
+    const dz = playerPos ? playerPos.z - u.z : 0;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    return {
+      name: u.name,
+      tactic: u.tactic,
+      dist
+    };
+  });
 }
 
 export function stageCover(camera, playerPos) {
-    if (!camera || units.length === 0) return;
-    const camDir = new THREE.Vector3();
-    camera.getWorldDirection(camDir);
-    camDir.y = 0;
-    camDir.normalize();
-
-    for (let i = 0; i < units.length; i++) {
-        const u = units[i];
-        if (!u || !u.mesh) continue;
-        if (i === 0) {
-            u.mesh.position.set(playerPos.x - camDir.x * 4 + 8.5, 0, playerPos.z - camDir.z * 4);
-        } else if (i === 1) {
-            u.mesh.position.set(playerPos.x - camDir.x * 4 - 8.5, 0, playerPos.z - camDir.z * 4);
-        } else {
-            const offsetDist = 16 + (i * 12);
-            u.mesh.position.set(playerPos.x - camDir.x * offsetDist, 0, playerPos.z - camDir.z * offsetDist);
-        }
+  units.forEach((u, i) => {
+    if (!playerPos) return;
+    if (i < 2) {
+      const offsetLat = (i === 0 ? -8.5 : 8.5);
+      u.x = playerPos.x + offsetLat;
+      u.z = playerPos.z - 4;
+    } else {
+      const queueDist = 16 + (i * 10);
+      u.x = playerPos.x + (i % 2 === 0 ? -12 : 12);
+      u.z = playerPos.z - queueDist;
     }
+  });
 }
 
 export function coverAudit(camera) {
-    if (!camera) return [];
-    const results = [];
-    const width = 1280;
-    const height = 720;
+  const results = [];
+  const tempV = new THREE.Vector3();
 
-    for (let i = 0; i < units.length; i++) {
-        const u = units[i];
-        if (!u || !u.mesh) continue;
+  units.forEach(u => {
+    tempV.set(u.x, u.y, u.z);
+    tempV.project(camera);
 
-        const v = u.mesh.position.clone();
-        v.project(camera);
+    const sx = (tempV.x * 0.5 + 0.5) * 100;
+    const sy = (-(tempV.y * 0.5) + 0.5) * 100;
+    const distance = Math.sqrt(u.x * u.x + u.z * u.z);
 
-        const sx = Math.round(((v.x + 1) / 2) * 100);
-        const sy = Math.round(((-v.y + 1) / 2) * 100);
-        const inFrame = v.z >= -1 && v.z <= 1 && sx >= 0 && sx <= 100 && sy >= 0 && sy <= 100;
+    results.push({
+      name: u.name,
+      tactic: u.tactic,
+      distance,
+      sx,
+      sy
+    });
+  });
 
-        if (inFrame) {
-            results.push({
-                name: u.name,
-                tactic: u.tactic,
-                distance: u.dist || 0,
-                sx: sx,
-                sy: sy
-            });
-        }
-    }
-    return results;
-}
-
-export function validatePoliceState() {
-    return heatLevel >= 0 && heatLevel <= 5;
-}
-
-// Add padding helper functions to ensure we reach the required line count
-export function debugLogPoliceState() {
-    console.log("Current Heat:", heatLevel, "Points:", crimePoints, "Units:", units.length);
-}
-
-export function getPoliceUnitCount() {
-    return units.length;
-}
-
-export function isUnitInPursuit(unitName) {
-    const u = units.find(unit => unit.name === unitName);
-    return u ? u.tactic === 'PURSUIT' : false;
-}
-
-export function getNearestUnitDistance(playerPos) {
-    let minDist = Infinity;
-    for (const u of units) {
-        const d = u.mesh.position.distanceTo(playerPos);
-        if (d < minDist) minDist = d;
-    }
-    return minDist;
-}
-
-export function policeDebugReset() {
-    respray();
-    crimePoints = 0;
-    heatLevel = 0;
+  return results;
 }

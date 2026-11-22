@@ -1,173 +1,140 @@
 import * as THREE from './three.module.min.js';
 
 export const WEAPON_SPECS = [
-    { name: 'Fists', dmg: 8, rate: 2, mag: 0, reserve: 0, spread: 0 },
-    { name: 'Chispa Pistol', dmg: 18, rate: 3, mag: 12, reserve: 60, spread: 0.03 },
-    { name: 'Zumbido SMG', dmg: 10, rate: 10, mag: 30, reserve: 120, spread: 0.05 },
-    { name: 'Trueno Shotgun', dmg: 6, pellets: 9, rate: 1, mag: 6, reserve: 24, spread: 0.08 }
+  { name: 'Fists', damage: 10, range: 3, fireInterval: 0.5, mag: 0, reserve: 0 },
+  { name: 'Pieza 9mm', damage: 25, range: 30, fireInterval: 0.2, mag: 17, reserve: 102 },
+  { name: 'Viuda SMG', damage: 18, range: 45, fireInterval: 0.09, mag: 30, reserve: 150 },
+  { name: 'Cazadora shotgun', damage: 80, range: 20, fireInterval: 0.8, mag: 8, reserve: 32 }
 ];
 
-let currentWeaponIdx = 0;
-let currentMag = 12;
-let currentReserve = 60;
+let weaponIndex = 0;
+let ammoList = [];
+let hp = 100;
 let armour = 100;
-let health = 100;
-let fireCooldown = 0;
+let reloading = false;
 let reloadTimer = 0;
-let wheelEl = null;
-let fireCallback = null;
-let muzzleFlashMesh = null;
-let activeTracers = [];
-let combatInitialized = false;
+let fireCooldown = 0;
+let wheelVisible = false;
 
-export function initCombat(domContainer, onFireCb) {
-    fireCallback = onFireCb;
-    currentWeaponIdx = 0;
-    combatInitialized = true;
-    syncAmmoForWeapon();
+export function initCombat() {
+  weaponIndex = 0;
+  hp = 100;
+  armour = 100;
+  reloading = false;
+  reloadTimer = 0;
+  fireCooldown = 0;
+  wheelVisible = false;
 
-    if (domContainer) {
-        wheelEl = document.createElement('div');
-        wheelEl.id = 'weapon-wheel-dom';
-        wheelEl.style.position = 'absolute';
-        wheelEl.style.bottom = '20px';
-        wheelEl.style.right = '20px';
-        wheelEl.style.background = 'rgba(0,0,0,0.7)';
-        wheelEl.style.color = '#fff';
-        wheelEl.style.padding = '10px';
-        wheelEl.style.fontFamily = 'monospace';
-        wheelEl.style.fontSize = '12px';
-        wheelEl.style.zIndex = '1000';
-        domContainer.appendChild(wheelEl);
-        updateWheelDOM();
-    }
+  ammoList = WEAPON_SPECS.map(spec => ({
+    current: spec.mag,
+    reserve: spec.reserve
+  }));
 }
 
-function syncAmmoForWeapon() {
-    const spec = WEAPON_SPECS[currentWeaponIdx];
-    currentMag = spec.mag;
-    currentReserve = spec.reserve;
-}
-
-export function switchWeapon(idx) {
-    if (idx >= 0 && idx < WEAPON_SPECS.length) {
-        currentWeaponIdx = idx;
-        syncAmmoForWeapon();
-        updateWheelDOM();
-    }
+export function switchWeapon(index) {
+  if (index >= 0 && index < WEAPON_SPECS.length) {
+    weaponIndex = index;
+    reloading = false;
+    reloadTimer = 0;
+  }
+  return weaponIndex;
 }
 
 export function nextWeapon() {
-    currentWeaponIdx = (currentWeaponIdx + 1) % WEAPON_SPECS.length;
-    syncAmmoForWeapon();
-    updateWheelDOM();
+  weaponIndex = (weaponIndex + 1) % WEAPON_SPECS.length;
+  reloading = false;
+  reloadTimer = 0;
+  return weaponIndex;
 }
 
 export function reloadWeapon() {
-    const spec = WEAPON_SPECS[currentWeaponIdx];
-    if (spec.mag === 0 || currentMag >= spec.mag || currentReserve <= 0) return;
-    reloadTimer = 1.5;
+  const spec = WEAPON_SPECS[weaponIndex];
+  if (spec.mag === 0 || reloading) return;
+  const ammo = ammoList[weaponIndex];
+  if (ammo.current >= spec.mag || ammo.reserve <= 0) return;
+
+  reloading = true;
+  reloadTimer = 1.5;
 }
 
-export function updateCombat(dt, camera, targets) {
-    if (!combatInitialized) return;
-    if (fireCooldown > 0) fireCooldown -= dt;
-    if (reloadTimer > 0) {
-        reloadTimer -= dt;
-        if (reloadTimer <= 0) {
-            const spec = WEAPON_SPECS[currentWeaponIdx];
-            const needed = spec.mag - currentMag;
-            const take = Math.min(needed, currentReserve);
-            currentMag += take;
-            currentReserve -= take;
-            updateWheelDOM();
-        }
+export function updateCombat(dt) {
+  if (fireCooldown > 0) {
+    fireCooldown -= dt;
+  }
+  if (reloading) {
+    reloadTimer -= dt;
+    if (reloadTimer <= 0) {
+      reloading = false;
+      const spec = WEAPON_SPECS[weaponIndex];
+      const ammo = ammoList[weaponIndex];
+      const needed = spec.mag - ammo.current;
+      const take = Math.min(needed, ammo.reserve);
+      ammo.current += take;
+      ammo.reserve -= take;
     }
+  }
 }
 
-export function fireWeapon(camera, targets) {
-    if (fireCooldown > 0 || reloadTimer > 0) return false;
-    const spec = WEAPON_SPECS[currentWeaponIdx];
+export function fireWeapon() {
+  if (fireCooldown > 0 || reloading) return false;
+  const spec = WEAPON_SPECS[weaponIndex];
+  const ammo = ammoList[weaponIndex];
 
-    if (spec.mag > 0) {
-        if (currentMag <= 0) {
-            reloadWeapon();
-            return false;
-        }
-        currentMag--;
-        updateWheelDOM();
+  if (spec.mag > 0) {
+    if (ammo.current <= 0) {
+      reloadWeapon();
+      return false;
     }
+    ammo.current--;
+  }
 
-    fireCooldown = 1 / spec.rate;
-
-    if (fireCallback) {
-        fireCallback(camera);
-    }
-
-    if (targets && targets.length > 0 && camera) {
-        const ray = new THREE.Raycaster();
-        const center = new THREE.Vector2(0, 0);
-        ray.setFromCamera(center, camera);
-
-        for (let i = 0; i < targets.length; i++) {
-            const t = targets[i];
-            if (!t || !t.mesh) continue;
-            const dist = camera.position.distanceTo(t.mesh.position);
-            if (dist < 50) {
-                const spreadVal = spec.spread || 0;
-                const hitChance = Math.max(0.1, 1.0 - dist / 60 - spreadVal);
-                if (Math.random() < hitChance) {
-                    const pellets = spec.pellets || 1;
-                    const totalDmg = spec.dmg * pellets;
-                    if (typeof t.damage === 'function') {
-                        t.damage(totalDmg);
-                    }
-                    break;
-                }
-            }
-        }
-    }
-    return true;
+  fireCooldown = spec.fireInterval;
+  return true;
 }
 
 export function getAmmo() {
-    return {
-        current: currentMag,
-        reserve: currentReserve,
-        index: currentWeaponIdx
-    };
-}
-
-function updateWheelDOM() {
-    if (!wheelEl) return;
-    const spec = WEAPON_SPECS[currentWeaponIdx];
-    wheelEl.innerHTML = `Weapon: <b>${spec.name}</b><br>Ammo: ${currentMag} / ${currentReserve}`;
-}
-
-export function getCombatStats() {
-    return {
-        health: health,
-        armour: armour,
-        weapon: WEAPON_SPECS[currentWeaponIdx].name,
-        mag: currentMag,
-        reserve: currentReserve
-    };
+  const spec = WEAPON_SPECS[weaponIndex];
+  const ammo = ammoList[weaponIndex] || { current: 0, reserve: 0 };
+  return {
+    current: spec.mag === 0 ? Infinity : ammo.current,
+    reserve: ammo.reserve,
+    index: weaponIndex
+  };
 }
 
 export function damagePlayer(amount) {
-    if (armour > 0) {
-        const absorb = Math.min(armour, amount);
-        armour -= absorb;
-        amount -= absorb;
-    }
-    health = Math.max(0, health - amount);
-    return health <= 0;
+  let rem = amount;
+  if (armour > 0) {
+    const absorb = Math.min(armour, rem);
+    armour -= absorb;
+    rem -= absorb;
+  }
+  if (rem > 0) {
+    hp = Math.max(0, hp - rem);
+  }
+  return hp;
 }
 
-export function healPlayer(amount) {
-    health = Math.min(100, health + amount);
+export function getCombatState() {
+  const spec = WEAPON_SPECS[weaponIndex];
+  const ammo = ammoList[weaponIndex] || { current: 0, reserve: 0 };
+  return {
+    weaponIndex,
+    weapon: spec,
+    ammo: ammo.current,
+    reserve: ammo.reserve,
+    reloading,
+    hp,
+    armour
+  };
 }
 
-export function validateCombatState() {
-    return combatInitialized && currentWeaponIdx >= 0 && currentWeaponIdx < WEAPON_SPECS.length;
+export function showWeaponWheel(visible) {
+  if (typeof visible === 'boolean') {
+    wheelVisible = visible;
+  }
+  return {
+    visible: wheelVisible,
+    selectedIndex: weaponIndex
+  };
 }

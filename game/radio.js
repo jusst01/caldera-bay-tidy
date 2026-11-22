@@ -1,54 +1,82 @@
-// game/radio.js
 import * as THREE from './three.module.min.js';
 
 let audioCtx = null;
-let currentStation = 0;
-const stations = [
-    { name: "RADIO CALDERA FM", lead: [440, 466, 494, 523, 587, 622, 659, 698, 740, 784, 831, 880, 932, 988, 1047, 1109], bass: [110, 110, 110, 110, 110, 110, 110, 110, 55, 55, 55, 55, 55, 55, 55, 55] },
-    { name: "ONDA NOCTURNA", lead: [220, 233, 247, 262, 294, 311, 330, 349, 370, 392, 415, 440, 466, 494, 523, 554], bass: [55, 55, 55, 55, 55, 55, 55, 55, 27, 27, 27, 27, 27, 27, 27, 27] },
-    { name: "CENIZA INDUSTRIAL", lead: [880, 932, 988, 1047, 1175, 1245, 1319, 1397, 1480, 1568, 1661, 1760, 1865, 1976, 2093, 2217], bass: [220, 220, 220, 220, 220, 220, 220, 220, 110, 110, 110, 110, 110, 110, 110, 110] }
+let currentStationIndex = 0;
+let isPlaying = false;
+let timerId = null;
+let currentStep = 0;
+
+const STATIONS = [
+  { name: 'RADIO CALDERA FM', notes: [220, 247, 261, 293, 329, 349, 392, 440, 392, 349, 329, 293, 261, 247, 220, 196] },
+  { name: 'ONDA NOCTURNA', notes: [110, 123, 130, 146, 164, 174, 196, 220, 196, 174, 164, 146, 130, 123, 110, 98] },
+  { name: 'CENIZA INDUSTRIAL', notes: [80, 90, 100, 110, 120, 130, 140, 150, 140, 130, 120, 110, 100, 90, 80, 70] }
 ];
 
-let nextTickTime = 0;
-let step = 0;
-
-function scheduleTone(time, freq, type) {
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, time);
-    gain.gain.setValueAtTime(0.1, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(time);
-    osc.stop(time + 0.2);
-}
-
-function scheduler() {
-    while (nextTickTime < audioCtx.currentTime + 0.14) {
-        const s = stations[currentStation];
-        scheduleTone(nextTickTime, s.lead[step], 'sine');
-        scheduleTone(nextTickTime, s.bass[step], 'square');
-        nextTickTime += 0.25;
-        step = (step + 1) % 16;
-    }
-    setTimeout(scheduler, 25);
-}
-
 export function initRadio() {
-    currentStation = 0;
+  currentStationIndex = 0;
+  isPlaying = false;
+  currentStep = 0;
 }
 
 export function startRadio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        nextTickTime = audioCtx.currentTime;
-        scheduler();
+  if (!audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) {
+      audioCtx = new AudioContext();
     }
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  isPlaying = true;
+  if (!timerId) {
+    timerId = setInterval(tickRadio, 250);
+  }
+}
+
+export function stopRadio() {
+  isPlaying = false;
+  if (timerId) {
+    clearInterval(timerId);
+    timerId = null;
+  }
+  if (audioCtx && audioCtx.state === 'running') {
+    audioCtx.suspend();
+  }
 }
 
 export function cycleStation() {
-    currentStation = (currentStation + 1) % stations.length;
+  currentStationIndex = (currentStationIndex + 1) % STATIONS.length;
+  currentStep = 0;
+  return getCurrentStationInfo();
+}
+
+export function getCurrentStationInfo(save) {
+  const station = STATIONS[currentStationIndex];
+  return { index: currentStationIndex, name: station.name };
+}
+
+function tickRadio() {
+  if (!isPlaying || !audioCtx) return;
+  const station = STATIONS[currentStationIndex];
+  const freq = station.notes[currentStep];
+
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = currentStationIndex === 2 ? 'sawtooth' : (currentStationIndex === 1 ? 'triangle' : 'sine');
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.2);
+  } catch (e) {
+  }
+
+  currentStep = (currentStep + 1) % 16;
 }
