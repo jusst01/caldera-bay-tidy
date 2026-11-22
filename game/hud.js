@@ -20,8 +20,8 @@ export function createHud(hooks) {
 
   // Pre-render offscreen minimap canvas once
   const offscreenCanvas = document.createElement('canvas');
-  offscreenCanvas.width = 360;
-  offscreenCanvas.height = 360;
+  offscreenCanvas.width = 1200;
+  offscreenCanvas.height = 1200;
   const offCtx = offscreenCanvas.getContext('2d');
   preRenderCityMinimap(offCtx);
 
@@ -36,6 +36,8 @@ export function createHud(hooks) {
       <div id="hud-timer" style="font-size:20px; font-weight:bold; font-family:monospace; color:#ffcc66; display:none; margin-bottom:4px;">00:45</div>
       <div id="hud-jobs-merged" style="font-size:12px; color:#cbd5e0; border-top:1px solid rgba(255,255,255,0.1); padding-top:6px; margin-top:4px;">JOBS 6/8 ✓✓✓✓✓✓··</div>
       <div id="hud-side-line" style="font-size:12px; color:#4fd1c5; margin-top:2px; display:none;">Contract: Zorro ($150)</div>
+      <div id="hud-district-name" style="font-size:12px; color:#4fd1c5; margin-top:6px; border-top:1px solid rgba(255,255,255,0.1); padding-top:4px; font-weight:bold;">DISTRICT: MUELLE</div>
+      <div id="hud-autosave" style="font-size:11px; color:#a0aec0; margin-top:2px;">AUTOSAVE 14:32</div>
     </div>
 
     <!-- Dispatch Panel (16, 196, width 280) -->
@@ -47,10 +49,10 @@ export function createHud(hooks) {
     </div>
 
     <!-- Top-Right Heat, Cash, REP -->
-    <div id="hud-panel-heat-cash" style="position:absolute; right:16px; top:16px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-      <div id="hud-heat-pips" style="font-size:18px; letter-spacing:2px; color:#ffaa44;">★★★★☆</div>
-      <div id="hud-cash-display" style="font-size:22px; font-weight:bold; font-family:monospace; color:#4fd1c5;">$4,210</div>
-      <div id="hud-rep-display" style="font-size:13px; color:#a0aec0; font-weight:bold;">REP 520 (FIXER)</div>
+    <div id="hud-panel-heat-cash" style="position:absolute; right:16px; top:16px; display:flex; flex-direction:column; align-items:flex-end; gap:6px; background:rgba(12,17,26,0.85); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:10px 14px; backdrop-filter:blur(6px);">
+      <div id="hud-heat" style="font-size:18px; letter-spacing:2px; color:#ffaa44;">★★★★☆</div>
+      <div id="hud-cash" style="font-size:22px; font-weight:bold; font-family:monospace; color:#4fd1c5;">$4,210</div>
+      <div id="hud-rep" style="font-size:13px; color:#a0aec0; font-weight:bold;">REP 520 (FIXER)</div>
     </div>
 
     <!-- Takeover Strip Top-Center (width 320) -->
@@ -258,11 +260,18 @@ export function createHud(hooks) {
       }
     }
 
-    // Heat, cash, rep
+    // Heat, cash, rep, district, autosave
     const stars = '★'.repeat(heat) + '☆'.repeat(5 - heat);
+    setVal('hud-heat', stars);
     setVal('hud-heat-pips', stars);
+    setVal('hud-cash', `$${(save.cash || 0).toLocaleString()}`);
     setVal('hud-cash-display', `$${(save.cash || 0).toLocaleString()}`);
+    setVal('hud-rep', `REP ${save.rep || 0} (${tierFor(save.rep || 0)})`);
     setVal('hud-rep-display', `REP ${save.rep || 0} (${tierFor(save.rep || 0)})`);
+
+    const curDist = districtAt(player.x || 0, player.z || 0).toUpperCase();
+    setVal('hud-district-name', `DISTRICT: ${curDist}`);
+    setVal('hud-autosave', `AUTOSAVE ${save.lastSaveClock || '14:32'}`);
 
     // Takeover strip
     const takeover = save.takeover || { muelle: 100, paseo: 80, verde: 60, ceniza: 30, cumbre: 10 };
@@ -293,7 +302,7 @@ export function createHud(hooks) {
       ctx.rotate(-heading);
       const px = player.x || 0;
       const pz = player.z || 0;
-      ctx.drawImage(offscreenCanvas, -px - 180, -pz - 180);
+      ctx.drawImage(offscreenCanvas, -px - 600, -pz - 600);
 
       // Draw player arrow
       ctx.fillStyle = '#ffaa44';
@@ -432,45 +441,46 @@ export function createHud(hooks) {
 
 function preRenderCityMinimap(ctx) {
   ctx.fillStyle = '#0b0e14';
-  ctx.fillRect(0, 0, 360, 360);
+  ctx.fillRect(0, 0, 1200, 1200);
 
-  // Draw districts with subtle tints and road grid
+  // Draw districts with subtle tints
   const districts = [
-    { name: 'muelle', color: 'rgba(50, 80, 120, 0.3)', rect: [0, 180, 180, 180] },
-    { name: 'paseo', color: 'rgba(80, 50, 120, 0.3)', rect: [180, 180, 180, 180] },
-    { name: 'verde', color: 'rgba(50, 120, 80, 0.3)', rect: [180, 0, 180, 180] },
-    { name: 'ceniza', color: 'rgba(120, 70, 50, 0.3)', rect: [0, 0, 180, 180] },
-    { name: 'cumbre', color: 'rgba(90, 90, 90, 0.3)', rect: [120, 120, 120, 120] }
+    { name: 'muelle', color: 'rgba(50, 80, 120, 0.35)', x: 300, z: 900, r: 250 },
+    { name: 'paseo', color: 'rgba(80, 50, 120, 0.35)', x: 930, z: 660, r: 250 },
+    { name: 'verde', color: 'rgba(50, 120, 80, 0.35)', x: 900, z: 300, r: 250 },
+    { name: 'ceniza', color: 'rgba(120, 70, 50, 0.35)', x: 300, z: 300, r: 250 },
+    { name: 'cumbre', color: 'rgba(90, 90, 90, 0.35)', x: 600, z: 100, r: 300 }
   ];
 
   for (const d of districts) {
     ctx.fillStyle = d.color;
-    ctx.fillRect(d.rect[0], d.rect[1], d.rect[2], d.rect[3]);
+    ctx.beginPath();
+    ctx.arc(d.x, d.z, d.r, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // Road grid
-  ctx.strokeStyle = '#2a3b5c';
-  ctx.lineWidth = 4;
-  // Two boulevards wider/warmer
+  // Road grid and boulevards (wider/warmer)
+  ctx.strokeStyle = '#e28743';
+  ctx.lineWidth = 8;
   ctx.beginPath();
-  ctx.moveTo(180, 0); ctx.lineTo(180, 360);
-  ctx.moveTo(0, 180); ctx.lineTo(360, 180);
+  ctx.moveTo(600, 0); ctx.lineTo(600, 1200);
+  ctx.moveTo(0, 600); ctx.lineTo(1200, 600);
   ctx.stroke();
 
-  ctx.strokeStyle = '#1a2638';
-  ctx.lineWidth = 2;
-  for (let x = 60; x < 360; x += 60) {
-    if (x === 180) continue;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 360); ctx.stroke();
+  ctx.strokeStyle = '#2a3b5c';
+  ctx.lineWidth = 3;
+  for (let x = 200; x < 1200; x += 200) {
+    if (x === 600) continue;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 1200); ctx.stroke();
   }
-  for (let y = 60; y < 360; y += 60) {
-    if (y === 180) continue;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(360, y); ctx.stroke();
+  for (let y = 200; y < 1200; y += 200) {
+    if (y === 600) continue;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(1200, y); ctx.stroke();
   }
 
-  // Volcano glyph at cumbre center
+  // Volcano glyph at cumbre center (600, 100)
   ctx.fillStyle = '#ffaa44';
   ctx.beginPath();
-  ctx.arc(180, 90, 12, 0, Math.PI * 2);
+  ctx.arc(600, 100, 24, 0, Math.PI * 2);
   ctx.fill();
 }

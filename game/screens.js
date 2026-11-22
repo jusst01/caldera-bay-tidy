@@ -2,7 +2,7 @@
 // START screen, GARAGE screen, and generic menu helper per design specs.
 
 import { REP_TIERS, tierFor, takeoverCount } from './save.js';
-import { VEHICLE_ROSTER } from './vehicles.js';
+import { VEHICLE_ROSTER, createVehicleMesh } from './vehicles.js';
 import { JOBS } from './missions.js';
 import * as THREE from './three.module.min.js';
 
@@ -160,7 +160,7 @@ export function openGarageScreen(save, callbacks) {
         <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1;">
           ${rosterKeys.map(key => {
             const spec = VEHICLE_ROSTER[key];
-            const price = spec.chop ? `$${spec.chop * 4}` : 'TOO HOT';
+            const price = spec.chop ? `$${spec.chop}` : 'TOO HOT';
             return `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px; font-size:13px;">
               <div>
                 <div style="font-weight:bold; color:#fff;">${spec.name}</div>
@@ -194,26 +194,26 @@ export function openGarageScreen(save, callbacks) {
       cameraT.lookAt(0, 0, 0);
       const rendererT = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true });
       rendererT.setSize(200, 200);
+      rendererT.setClearColor(0x0a1018, 1);
 
-      const amb = new THREE.AmbientLight(0xffffff, 0.9);
+      const amb = new THREE.AmbientLight(0xffffff, 1.5);
       sceneT.add(amb);
-      const dir = new THREE.DirectionalLight(0xffaa44, 1.2);
-      dir.position.set(5, 10, 5);
-      sceneT.add(dir);
+      const dir1 = new THREE.DirectionalLight(0xffaa44, 2.0);
+      dir1.position.set(2, 5, 4);
+      sceneT.add(dir1);
+      const dir2 = new THREE.DirectionalLight(0x4fd1c5, 1.5);
+      dir2.position.set(-2, 3, -2);
+      sceneT.add(dir2);
 
-      const carGroup = new THREE.Group();
-      const body = new THREE.Mesh(
-        new THREE.BoxGeometry(1.8, 0.8, 3.8),
-        new THREE.MeshStandardMaterial({ color: 0x3366cc, roughness: 0.3, metalness: 0.8 })
-      );
-      body.position.y = 0.4;
-      carGroup.add(body);
-      sceneT.add(carGroup);
+      const stagedSpec = (ownedCars.length > 0 && ownedCars[0].spec) ? ownedCars[0].spec : 'zorro';
+      const carMesh = createVehicleMesh(stagedSpec, 0x3366cc);
+      carMesh.position.set(0, -0.3, 0);
+      sceneT.add(carMesh);
 
       let angle = 0;
       function animT() {
         angle += 0.015;
-        carGroup.rotation.y = angle;
+        carMesh.rotation.y = angle;
         rendererT.render(sceneT, cameraT);
         if (document.body.contains(canvasEl)) {
           requestAnimationFrame(animT);
