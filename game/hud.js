@@ -432,16 +432,6 @@ export function createHud(hooks) {
       }
     }
 
-    // Centre-Bottom Prompt
-    const promptPanel = document.getElementById('hud-panel-prompt');
-    if (promptPanel) {
-      if (snapshot.prompt) {
-        promptPanel.style.display = 'block';
-        setVal('hud-panel-prompt', snapshot.prompt);
-      } else {
-        promptPanel.style.display = 'none';
-      }
-    }
   }
 
   return {

@@ -225,8 +225,10 @@ window.__photo = {
       player.isDriving = false;
       player.currentVehicle = null;
       const stageCar = missionsContext ? missionsContext.stageCar() : null;
-      const basePos = stageCar ? { x: stageCar.x + 1.5, z: stageCar.z } : { x: -250, z: 250 };
-      const validPos = findStreetPosition(basePos.x, basePos.z);
+      let validPos = { x: -250, z: 252.5 };
+      if (stageCar) {
+        validPos = { x: stageCar.x, z: stageCar.z + 2.5 };
+      }
       player.x = validPos.x;
       player.z = validPos.z;
       player.y = groundHeight(player.x, player.z);
@@ -237,8 +239,8 @@ window.__photo = {
         player.angle = 0;
       }
 
-      const camDist = 4.5;
-      const camHeight = 2.0;
+      const camDist = 6.0;
+      const camHeight = 2.2;
       camera.position.set(
         player.x - Math.sin(player.angle) * camDist,
         player.y + 1.0 + camHeight,
@@ -978,8 +980,8 @@ function renderFrame() {
   const targetY = player.isDriving ? player.currentVehicle.y + 1.2 : player.y + 1.0;
   const targetAngle = player.isDriving ? player.currentVehicle.angle : player.angle;
 
-  const camDist = player.isDriving ? 7.5 : 4.5;
-  const camHeight = player.isDriving ? 2.8 : 2.0;
+  const camDist = player.isDriving ? 7.5 : 6.0;
+  const camHeight = player.isDriving ? 2.8 : 2.2;
 
   const idealCamX = targetX - Math.sin(targetAngle) * camDist;
   const idealCamZ = targetZ - Math.cos(targetAngle) * camDist;

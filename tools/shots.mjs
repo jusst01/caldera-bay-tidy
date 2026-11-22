@@ -82,6 +82,8 @@ server.listen(0, '127.0.0.1', async () => {
     // ----------------------------------------------------
     console.log('\n--- CAPTURING SHOT 1: cover.png ---');
     const page1 = await browser.newPage();
+    page1.on('console', msg => console.log('PAGE LOG:', msg.text()));
+    page1.on('pageerror', err => console.log('PAGE ERROR:', err.message));
     await page1.goto(`${baseUrl}?shot=play&seed=14`, { waitUntil: 'load' });
     await new Promise(r => setTimeout(r, 1000));
 
