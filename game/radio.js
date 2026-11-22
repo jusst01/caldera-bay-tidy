@@ -9,13 +9,17 @@ const STATIONS = [
 let audioCtx = null;
 let currentStation = 0;
 let nextTick = 0;
-let tickInterval = 0;
 
 export function initRadio(save) {
-  // Init
+  if (save && typeof save.radioStation === 'number') {
+    currentStation = ((save.radioStation % STATIONS.length) + STATIONS.length) % STATIONS.length;
+  }
 }
 
-export function startRadio() {
+export function startRadio(save) {
+  if (save && typeof save.radioStation === 'number') {
+    currentStation = ((save.radioStation % STATIONS.length) + STATIONS.length) % STATIONS.length;
+  }
   start();
 }
 
@@ -25,17 +29,17 @@ export function cycleStation() {
   if (window.save) window.save.radioStation = currentStation;
 }
 
-// Internal start logic
-let audioCtx = null;
-let currentStation = 0;
-let nextTick = 0;
-
 function start() {
   if (audioCtx) return;
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  audioCtx = new AudioContextClass();
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  nextTick = audioCtx.currentTime + 0.05;
   tick();
 }
-// ... (rest of the file)
 
 function tick() {
   if (!audioCtx) return;
