@@ -5,6 +5,9 @@ import { initPolice, updatePolice, reportCrime } from './police.js';
 import { loadSave, saveSave } from './save.js';
 import { createMissions } from './missions.js';
 import { createEconomy } from './economy.js';
+import { initRadio } from './radio.js';
+import { createHud } from './hud.js';
+import { openStartScreen, openGarageScreen } from './screens.js';
 
 let missions, economy, save;
 
@@ -12,6 +15,7 @@ function init() {
     initPedestrians();
     initCombat();
     initPolice();
+    initRadio();
     save = loadSave();
     missions = createMissions({ save });
     economy = createEconomy({ save });
