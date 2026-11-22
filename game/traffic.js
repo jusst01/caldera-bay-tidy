@@ -9,12 +9,21 @@ function seededRandom() {
   return (seed - 1) / 2147483646;
 }
 
+const laneGraph = [
+  {id: 0, x: 0, z: 0, next: [1, 2]},
+  {id: 1, x: 100, z: 0, next: [0, 3]},
+  {id: 2, x: 0, z: 100, next: [0, 4]},
+  {id: 3, x: 100, z: 100, next: [1, 2]},
+  {id: 4, x: 200, z: 200, next: [3]}
+];
+
 export function initTraffic(scene) {
   trafficCars = [];
   for (let i = 0; i < 24; i++) {
-    const x = (seededRandom() - 0.5) * 500;
-    const z = (seededRandom() - 0.5) * 500;
-    const car = spawnVehicle('colibri', x, z, seededRandom() * Math.PI * 2, scene);
+    const node = laneGraph[Math.floor(seededRandom() * laneGraph.length)];
+    const car = spawnVehicle('colibri', node.x + 3.4, node.z, seededRandom() * Math.PI * 2, scene);
+    car.node = node;
+    car.lastNode = null;
     trafficCars.push(car);
   }
 }
@@ -25,18 +34,32 @@ export function spawnTraffic() {
 
 export function updateTraffic(dt) {
   trafficCars.forEach(car => {
-    car.speed = 20;
+    car.engineForce = 1500;
 
     let slowDown = false;
     trafficCars.forEach(other => {
       if (car === other) return;
       const dist = Math.sqrt((car.x - other.x)**2 + (car.z - other.z)**2);
-      if (dist < 10) slowDown = true;
+      if (dist < 20) slowDown = true;
     });
 
-    if (slowDown) car.speed *= 0.5;
+    if (slowDown) {
+      car.engineForce = 0;
+      car.brake = 1;
+    } else {
+      car.brake = 0;
+    }
 
     updateVehicle(car, dt);
+
+    if (Math.abs(car.x - (car.node.x + 3.4)) < 5 && Math.abs(car.z - car.node.z) < 5) {
+      let nextOptions = car.node.next.filter(id => id !== (car.lastNode ? car.lastNode.id : -1));
+      if (nextOptions.length === 0) nextOptions = car.node.next;
+      const nextId = nextOptions[Math.floor(seededRandom() * nextOptions.length)];
+      car.lastNode = car.node;
+      car.node = laneGraph.find(n => n.id === nextId);
+      car.angle = Math.atan2((car.node.x + 3.4) - car.x, car.node.z - car.z);
+    }
   });
 }
 

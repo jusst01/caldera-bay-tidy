@@ -22,40 +22,34 @@ function getGroundHeight(x, z) {
 export function createVehicleMesh(id) {
   const group = new THREE.Group();
   const spec = VEHICLE_ROSTER.find(v => v.id === id);
-
-  const bodyGeo = new THREE.BoxGeometry(2, 0.8, 4);
-  const bodyMat = new THREE.MeshPhongMaterial({ color: spec.colour });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 4), new THREE.MeshPhongMaterial({ color: spec.colour }));
   body.position.y = 0.5;
   group.add(body);
-
-  const cabinGeo = new THREE.BoxGeometry(1.6, 0.6, 2);
-  const cabinMat = new THREE.MeshPhongMaterial({ color: '#222222' });
-  const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 2), new THREE.MeshPhongMaterial({ color: '#222222' }));
   cabin.position.set(0, 1.2, 0);
   group.add(cabin);
-
-  const wheelGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.4, 8);
-  const wheelMat = new THREE.MeshPhongMaterial({ color: '#111111' });
-
   for (let i = 0; i < 4; i++) {
-    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.4, 8), new THREE.MeshPhongMaterial({ color: '#111111' }));
     wheel.rotation.z = Math.PI / 2;
     wheel.position.set(i % 2 === 0 ? -1 : 1, 0.3, i < 2 ? -1.5 : 1.5);
     group.add(wheel);
   }
-
   if (spec.class === 'police' || spec.class === 'SWAT') {
     const lightBar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.5), new THREE.MeshBasicMaterial({ color: '#ff0000' }));
     lightBar.position.set(0, 1.6, 0);
     group.add(lightBar);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.1, 4.1), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+    stripe.position.y = 0.5;
+    group.add(stripe);
   } else if (spec.class === 'heli') {
+    const rotor = new THREE.Mesh(new THREE.BoxGeometry(4, 0.1, 0.2), new THREE.MeshPhongMaterial({ color: '#555555' }));
+    rotor.position.y = 2;
+    group.add(rotor);
     const cone = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2, 16), new THREE.MeshBasicMaterial({ color: '#ffffaa', transparent: true, opacity: 0.5 }));
     cone.position.set(0, -1, 0);
     cone.rotation.x = Math.PI;
     group.add(cone);
   }
-
   return group;
 }
 
@@ -63,50 +57,37 @@ export function spawnVehicle(id, x, z, heading, scene) {
   const spec = VEHICLE_ROSTER.find(v => v.id === id);
   const mesh = createVehicleMesh(id);
   scene.add(mesh);
-
-  const vehicle = {
-    id,
-    x,
-    z,
-    y: getGroundHeight(x, z),
-    angle: heading,
-    speed: 0,
-    name: spec.name,
-    durability: 100,
-    mesh: mesh,
-    dead: false
+  return {
+    id, x, z, y: getGroundHeight(x, z), angle: heading, speed: 0,
+    name: spec.name, durability: 100, mesh: mesh, dead: false,
+    engineForce: 0, brake: 0, grip: spec.grip, mass: spec.id === 'mula' ? 1600 : 1200,
+    velocity: new THREE.Vector3(0,0,0)
   };
-
-  mesh.position.set(x, vehicle.y, z);
-  mesh.rotation.y = heading;
-
-  return vehicle;
 }
 
-export function updateVehicle(vehicle, dt) {
-  if (vehicle.dead) return;
-
-  const drag = 0.98;
-  vehicle.speed *= drag;
-
-  vehicle.x += Math.sin(vehicle.angle) * vehicle.speed * dt;
-  vehicle.z += Math.cos(vehicle.angle) * vehicle.speed * dt;
-  vehicle.y = getGroundHeight(vehicle.x, vehicle.z);
-
-  vehicle.mesh.position.set(vehicle.x, vehicle.y, vehicle.z);
-  vehicle.mesh.rotation.y = vehicle.angle;
-
-  if (vehicle.durability <= 0) {
-    vehicle.dead = true;
-    vehicle.speed = 0;
-  }
+export function updateVehicle(v, dt) {
+  if (v.dead) return;
+  const forward = new THREE.Vector3(Math.sin(v.angle), 0, Math.cos(v.angle));
+  const drag = v.speed * 0.1;
+  const totalForce = (v.engineForce - (v.brake * v.speed * 5) - drag);
+  v.speed += (totalForce / v.mass) * dt;
+  const lateralVelocity = v.velocity.clone().projectOnPlane(forward);
+  v.velocity.add(forward.multiplyScalar(v.speed * dt));
+  v.velocity.sub(lateralVelocity.multiplyScalar(v.grip * dt));
+  v.x += v.velocity.x;
+  v.z += v.velocity.z;
+  v.y = getGroundHeight(v.x, v.z);
+  v.mesh.position.set(v.x, v.y, v.z);
+  v.mesh.rotation.y = v.angle;
+  if (v.durability <= 0) v.dead = true;
 }
 
-export function damageVehicle(vehicle, amount) {
-  vehicle.durability -= amount;
-  if (vehicle.durability < 0) vehicle.durability = 0;
+export function damageVehicle(v, other, impactSpeed) {
+  const damage = impactSpeed * (other.mass / v.mass);
+  v.durability -= damage;
+  if (v.durability < 0) v.durability = 0;
 }
 
-export function markStolen(vehicle) {
-  vehicle.stolen = true;
+export function markStolen(v) {
+  v.stolen = true;
 }
