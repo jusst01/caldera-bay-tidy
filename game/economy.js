@@ -2,7 +2,7 @@
 // Economy system, shops, prices, REP tier unlocks, contracts, time trials, car storage/chopping, and fast travel.
 
 import { VEHICLE_ROSTER } from './vehicles.js';
-import { resry as policeRespray } from './police.js';
+import { respray } from './police.js';
 
 export const SHOP_POS = {
   weapons: { x: 320, z: 192 },
@@ -114,7 +114,7 @@ export function createEconomy(ctx) {
       action: () => {
         if (ctx.save.cash >= PRICES.respray) {
           ctx.save.cash -= PRICES.respray;
-          policeRespray();
+          respray();
           if (ctx.player.isDriving && ctx.player.currentVehicle) {
             // Repaint vehicle mesh
             const car = ctx.player.currentVehicle;
