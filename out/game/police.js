@@ -3,7 +3,7 @@
 
 import * as THREE from './three.module.min.js';
 import { groundHeight } from './city.js';
-import { spawnVehicle, updateVehicle } from './vehicles.js';
+import { spawnVehicle, updateVehicle, createVehicleMesh } from './vehicles.js';
 import { witnessesAt } from './pedestrians.js';
 
 const DISPATCH_NAMES = [
@@ -107,25 +107,46 @@ export function forceRoadblock(pos, heading) {
 }
 
 export function stageCover(cameraPos, cameraDir) {
-  // Addendum #4: stage HEAT pack measured against given camera: front pair abeam at 3-5m astern with ±8.5m lateral, rest in 16-75m queue, speeds matched
-  respray();
+  // Clear existing units/roadblocks
+  units.forEach(u => { if (sceneRef && u.mesh) sceneRef.remove(u.mesh); });
+  units = [];
+  roadblocks.forEach(r => { if (sceneRef && r.mesh) sceneRef.remove(r.mesh); });
+  roadblocks = [];
+
   const fwdX = cameraDir.x;
   const fwdZ = cameraDir.z;
   const rightX = -fwdZ;
   const rightZ = fwdX;
 
-  // Front pair abeam at 4m astern with ±8.5m lateral
-  const asternX = cameraPos.x - fwdX * 4;
-  const asternZ = cameraPos.z - fwdZ * 4;
+  // Front pair ahead of camera at 10m with ±8.5m lateral
+  const aheadX = cameraPos.x + fwdX * 10;
+  const aheadZ = cameraPos.z + fwdZ * 10;
 
-  const u1 = spawnVehicle('fenix', asternX + rightX * 8.5, asternZ + rightZ * 8.5, Math.atan2(fwdX, fwdZ), sceneRef);
-  const u2 = spawnVehicle('fenix', asternX - rightX * 8.5, asternZ - rightZ * 8.5, Math.atan2(fwdX, fwdZ), sceneRef);
+  const u1 = spawnVehicle('fenix', aheadX + rightX * 8.5, aheadZ + rightZ * 8.5, Math.atan2(fwdX, fwdZ), sceneRef);
+  const u2 = spawnVehicle('fenix', aheadX - rightX * 8.5, aheadZ - rightZ * 8.5, Math.atan2(fwdX, fwdZ), sceneRef);
+  const u3 = spawnVehicle('fenix', aheadX + rightX * 2.0, aheadZ + rightZ * 2.0, Math.atan2(fwdX, fwdZ), sceneRef);
 
   u1.name = DISPATCH_NAMES[0];
   u2.name = DISPATCH_NAMES[1];
+  u3.name = DISPATCH_NAMES[2];
   u1.tactic = 'PURSUIT';
   u2.tactic = 'PURSUIT';
-  units.push(u1, u2);
+  u3.tactic = 'PURSUIT';
+  units.push(u1, u2, u3);
+
+  const targetCount = heatLevel === 1 ? 2 : (heatLevel === 2 ? 4 : (heatLevel === 3 ? 6 : (heatLevel === 4 ? 8 : 10)));
+  while (units.length < targetCount) {
+    const idx = units.length;
+    const spawnAngle = (idx / targetCount) * Math.PI * 2;
+    const spawnDist = 45 + (idx * 6);
+    const sx = cameraPos.x + Math.sin(spawnAngle) * spawnDist;
+    const sz = cameraPos.z + Math.cos(spawnAngle) * spawnDist;
+    const type = (heatLevel === 5 && idx >= 8) ? 'perro' : 'fenix';
+    const vehicle = spawnVehicle(type, sx, sz, 0, sceneRef);
+    vehicle.name = DISPATCH_NAMES[idx % DISPATCH_NAMES.length];
+    vehicle.tactic = heatLevel >= 4 ? 'SPOTLIGHT' : 'PURSUIT';
+    units.push(vehicle);
+  }
 }
 
 export function coverAudit() {

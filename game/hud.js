@@ -246,7 +246,7 @@ export function createHud(hooks) {
             const u = units[i];
             const dist10 = Math.round((u.dist || 40) / 10) * 10;
             const tactic = u.tactic || 'PURSUIT';
-            rowsHtml += `<div style="display:flex; justify-content:space-between;"><span>U${10+i} ${u.name || 'CRUISER'}</span><span>${dist10}m · ${tactic}</span></div>`;
+            rowsHtml += `<div style="display:flex; justify-content:space-between;"><span>${u.name || 'CRUISER'}</span><span>${dist10}m · ${tactic}</span></div>`;
           }
           if (units.length > 4) {
             rowsHtml += `<div style="color:#a0aec0; text-align:center;">+${units.length - 4} more</div>`;

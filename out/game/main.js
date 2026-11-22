@@ -1,5 +1,5 @@
 // CALDERA BAY — game/main.js
-// Core boot, fixed-step 1/60 sim, chase cam, on-foot controller, carjacking, combat, pedestrians, police integration, save state, photo mode, test hooks.
+// Core boot, fixed-step 1/60 sim, chase cam, on-foot controller, carjacking, combat, pedestrians, police, save, photo mode, HUD, radio, screens.
 
 import * as THREE from './three.module.min.js';
 import { buildCity, groundHeight, districtAt, collideCircle, eject, setFinaleDusk, updateSun } from './city.js';
@@ -8,6 +8,12 @@ import { initTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian, debugSetPed } from './pedestrians.js';
 import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, damagePlayer, getCombatState, showWeaponWheel } from './combat.js';
 import { initPolice, reportCrime, setPointsFloor, respray, getHeat, getHeatPoints, getUnits, forceRoadblock, stageCover, coverAudit, updatePolice } from './police.js';
+import { loadSave, storeSave, tierFor, takeoverCount, canonicalSave, clearSave } from './save.js';
+import { createMissions, JOBS } from './missions.js';
+import { createEconomy, SHOP_POS, TIME_TRIALS } from './economy.js';
+import { createHud } from './hud.js';
+import { initRadio, startRadio, cycleStation, getCurrentStationInfo, stopRadio } from './radio.js';
+import { openStartScreen, openGarageScreen, openMenu, closeCurrentScreen } from './screens.js';
 
 // Seeded PRNG (Mulberry32)
 let currentSeed = 1337;
@@ -23,20 +29,7 @@ function mulberry32(seed) {
 let rng = mulberry32(currentSeed);
 
 // Canonical Save State
-let save = {
-  cash: 4210,
-  rep: 520,
-  repTitle: 'FIXER',
-  jobs: '6/8',
-  mission: '7 active',
-  takeover: '3/5',
-  autosave: '14:32',
-  stolen: 41,
-  topSpeed: 247,
-  maxHeat: 5,
-  ammo: 100,
-  health: 100
-};
+let save = loadSave();
 
 export function gatherSave() {
   return { ...save };
@@ -44,9 +37,7 @@ export function gatherSave() {
 
 export function persistSave() {
   if (window.__photoActive) return;
-  try {
-    localStorage.setItem('caldera_bay_save', JSON.stringify(save));
-  } catch (e) {}
+  storeSave(save);
 }
 
 // Game State & World
@@ -65,8 +56,16 @@ let missionState = { active: true, name: 'MISSION: 7 active', stage: 1 };
 let interactables = [];
 let keys = {};
 let gunshotEvents = [];
+let hud = null;
+let screenActive = true; // Sim paused while screen/menu open
+let radioStarted = false;
+let lastCallout = { text: '', age: 999 };
+let lastDialogue = { speaker: '', text: '', age: 999 };
+let garageStagedCar = null;
+let turntableAngle = 0;
 
 export function notify(msg, duration = 3000) {
+  lastCallout = { text: msg, age: 0 };
   const el = document.getElementById('hud-notify');
   if (!el) return;
   el.textContent = msg;
@@ -77,6 +76,7 @@ export function notify(msg, duration = 3000) {
 }
 
 export function dialogue(speaker, text, duration = 4000) {
+  lastDialogue = { speaker, text, age: 0 };
   const box = document.getElementById('hud-dialogue');
   const spk = document.getElementById('hud-dialogue-speaker');
   const txt = document.getElementById('hud-dialogue-text');
@@ -97,18 +97,6 @@ export function registerInteractable(item) {
   };
 }
 
-registerInteractable({
-  pos: { x: -300, z: 300 },
-  radius: 3.5,
-  label: () => "Press E to Save Game & Rest",
-  action: () => {
-    persistSave();
-    respray();
-    notify("GAME SAVED AT MUELLE SAFEHOUSE", 2500);
-    dialogue("SAFEHOUSE", "Rested up. Wanted level cleared, cash and reputation secured.");
-  }
-});
-
 export function onBustedOrWasted(isBusted) {
   missionState.active = false;
   notify(isBusted ? "BUSTED!" : "WASTED!", 4000);
@@ -128,6 +116,177 @@ export function onBustedOrWasted(isBusted) {
   player.currentVehicle = null;
 }
 
+function findStreetPosition(targetX, targetZ) {
+  let x = targetX;
+  let z = targetZ;
+  let radius = 2.5;
+  let attempts = 0;
+  while (collideCircle(x, z, radius) && attempts < 30) {
+    x += 8;
+    z += 8;
+    attempts++;
+  }
+  return { x, z, y: groundHeight(x, z) };
+}
+
+window.__photo = {
+  load(spec) {
+    window.__photoActive = true;
+    screenActive = false;
+    closeCurrentScreen();
+
+    const titleOverlay = document.getElementById('title-overlay');
+    if (titleOverlay) titleOverlay.style.display = 'none';
+    const dialogueBox = document.getElementById('hud-dialogue');
+    if (dialogueBox) dialogueBox.style.display = 'none';
+    const notifyBox = document.getElementById('hud-notify');
+    if (notifyBox) notifyBox.style.display = 'none';
+
+    showWeaponWheel(false);
+
+    if (spec && typeof spec.seed === 'number') {
+      currentSeed = spec.seed;
+      rng = mulberry32(currentSeed);
+    }
+
+    while(scene.children.length > 0) {
+      scene.remove(scene.children[0]);
+    }
+    buildCity(scene, rng);
+    initTraffic(scene, rng);
+    initPedestrians(scene, rng);
+    initPolice(scene);
+
+    missionsContext = createMissions({
+      scene,
+      player,
+      save,
+      notify,
+      dialogue,
+      registerInteractable,
+      damagePlayer: (dmg) => {
+        const dead = damagePlayer(dmg);
+        if (dead) {
+          if (missionsContext) missionsContext.onPlayerDown();
+          onBustedOrWasted(false);
+        }
+      },
+      missionActive: () => missionsContext ? missionsContext.jobActive() : false
+    });
+
+    economyContext = createEconomy({
+      scene,
+      player,
+      save,
+      notify,
+      dialogue,
+      registerInteractable,
+      missionActive: () => missionsContext ? missionsContext.jobActive() : false
+    });
+
+    if (spec && spec.save === 'canonical') {
+      save = canonicalSave();
+      save.cash = 4210;
+      save.rep = 520;
+      save.missionIndex = spec.job !== undefined ? spec.job : 7;
+      save.jobsDone = spec.job !== undefined ? Math.max(0, spec.job) : 6;
+    } else if (spec && spec.save && typeof spec.save === 'object') {
+      Object.assign(save, spec.save);
+    }
+
+    if (spec && spec.job !== undefined) {
+      missionState = { active: true, name: `MISSION: ${spec.job} active`, stage: spec.jobStage || 0 };
+      if (missionsContext) {
+        missionsContext.forceStage(spec.job, spec.jobStage || 0);
+      }
+    }
+
+    if (spec && spec.heat !== undefined) {
+      setPointsFloor(spec.heat);
+    }
+
+    if (spec && spec.mode === 'drive') {
+      const startPos = (spec.job !== undefined && JOBS[spec.job]) ? JOBS[spec.job].startPos : { x: -200, z: 200 };
+      const validPos = findStreetPosition(startPos.x, startPos.z);
+      const carSpec = (spec.job !== undefined && JOBS[spec.job] && JOBS[spec.job].stages) ? (JOBS[spec.job].stages.find(s => s.spec)?.spec || 'zorro') : 'zorro';
+      const car = spawnVehicle(carSpec, validPos.x, validPos.z, 0, scene);
+      car.speed = 18; // ~65 km/h
+      player.x = car.x;
+      player.z = car.z;
+      player.y = car.y;
+      player.isDriving = true;
+      player.currentVehicle = car;
+    } else if (spec && spec.mode === 'foot') {
+      player.isDriving = false;
+      player.currentVehicle = null;
+      const startPos = (spec.job !== undefined && JOBS[spec.job]) ? JOBS[spec.job].startPos : { x: -150, z: 150 };
+      const validPos = findStreetPosition(startPos.x, startPos.z);
+      player.x = validPos.x;
+      player.z = validPos.z;
+      player.y = groundHeight(player.x, player.z);
+    }
+
+    if (spec && spec.heat !== undefined) {
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      stageCover(camera.position, fwd);
+    }
+
+    if (spec && spec.dialogue) {
+      dialogue(spec.dialogue.speaker, spec.dialogue.text);
+    }
+    if (spec && spec.event) {
+      notify(spec.event);
+    }
+
+    if (spec && spec.screen === 'start') {
+      screenActive = true;
+      openStartScreen(save, {});
+    } else if (spec && spec.screen === 'garage') {
+      screenActive = true;
+      openGarageScreen(save, {});
+    }
+
+    updateHudDisplay();
+    renderFrame();
+  },
+  capture() {
+    if (!renderer) return '';
+    return renderer.domElement.toDataURL('image/jpeg', 0.9);
+  },
+  state() {
+    return {
+      seed: currentSeed,
+      hash: computeStateHash(),
+      player: { x: player.x, z: player.z, isDriving: player.isDriving },
+      save: gatherSave(),
+      heat: getHeat(),
+      missionState,
+      units: getUnits().map(u => ({ name: u.name, tactic: u.tactic, x: u.x, z: u.z, dist: Math.sqrt((player.x - u.x)**2 + (player.z - u.z)**2) })),
+      peds: getPedestrians().map(p => ({ x: p.x, z: p.z }))
+    };
+  }
+};
+
+window.__calderaTest = {
+  state: () => ({ player, save, heat: getHeat(), heatPoints: getHeatPoints(), missionState, units: getUnits(), peds: getPedestrians() }),
+  hash: () => computeStateHash(),
+  project: (x, y, z) => {
+    const v = new THREE.Vector3(x, y, z);
+    v.project(camera);
+    const xPct = (v.x * 0.5 + 0.5) * 100;
+    const yPct = (-(v.y) * 0.5 + 0.5) * 100;
+    const inFrame = v.x >= -1 && v.x <= 1 && v.y >= -1 && v.y <= 1 && v.z < 1;
+    return { xPct, yPct, inFrame, ndcX: v.x, ndcY: v.y };
+  },
+  stageCover: () => {
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    stageCover(camera.position, fwd);
+  },
+  coverAudit,
+  debugSetPed,
+  step: (dt) => { fixedUpdate(dt || 1/60); renderFrame(); }
+};
+
 function init() {
   const canvas = document.getElementById('game');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -142,6 +301,9 @@ function init() {
   initTraffic(scene, rng);
   initPedestrians(scene, rng);
   initPolice(scene);
+  initRadio(save);
+
+  hud = createHud({});
 
   initCombat(scene, {
     onGunshot: (pos) => {
@@ -153,10 +315,8 @@ function init() {
     },
     onHit: (target, damage) => {
       if (target.typeKey !== undefined) {
-        // Vehicle target
         damageVehicle(target, damage);
       } else if (target.arch !== undefined) {
-        // Pedestrian target
         const dropped = damagePedestrian(target, damage);
         if (dropped > 0) {
           save.cash += dropped;
@@ -169,6 +329,39 @@ function init() {
 
   player.y = groundHeight(player.x, player.z);
 
+  missionsContext = createMissions({
+    scene,
+    player,
+    save,
+    notify,
+    dialogue,
+    registerInteractable,
+    damagePlayer: (dmg) => {
+      const dead = damagePlayer(dmg);
+      if (dead) {
+        if (missionsContext) missionsContext.onPlayerDown();
+        onBustedOrWasted(false);
+      }
+    },
+    missionActive: () => missionsContext ? missionsContext.jobActive() : false
+  });
+  missionsContext.armJobStart();
+
+  economyContext = createEconomy({
+    scene,
+    player,
+    save,
+    notify,
+    dialogue,
+    registerInteractable,
+    missionActive: () => missionsContext ? missionsContext.jobActive() : false
+  });
+
+  window.updateHudDisplay = updateHudDisplay;
+
+  registerShopInteractables();
+  registerTrialInteractables();
+
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -177,6 +370,10 @@ function init() {
 
   window.addEventListener('keydown', (e) => {
     keys[e.key.toLowerCase()] = true;
+    if (!radioStarted) {
+      radioStarted = true;
+      startRadio(save);
+    }
     if (e.key === 'e' || e.key === 'E') {
       handleInteractPress();
     }
@@ -184,7 +381,17 @@ function init() {
       handleMugPress();
     }
     if (e.key === 'r' || e.key === 'R') {
-      reloadWeapon();
+      if (keys['shift']) {
+        cycleStation(save);
+        notify(`RADIO: ${getCurrentStationInfo(save).name}`, 2000);
+      } else {
+        reloadWeapon();
+      }
+    }
+    if (e.key === 'F5') {
+      e.preventDefault();
+      storeSave(save);
+      notify(`GAME SAVED (${save.lastSaveClock})`, 2500);
     }
     if (e.key === '1') switchWeapon(0);
     if (e.key === '2') switchWeapon(1);
@@ -201,7 +408,11 @@ function init() {
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && !player.isDriving) {
+    if (!radioStarted) {
+      radioStarted = true;
+      startRadio(save);
+    }
+    if (e.button === 0 && !player.isDriving && !screenActive) {
       const peds = getPedestrians();
       const cars = getTrafficCars();
       const unitsList = getUnits();
@@ -210,19 +421,266 @@ function init() {
     }
   });
 
-  const startBtn = document.getElementById('start-btn');
-  if (startBtn) {
-    startBtn.addEventListener('click', () => {
-      const overlay = document.getElementById('title-overlay');
-      if (overlay) overlay.style.opacity = '0';
-      setTimeout(() => {
-        if (overlay) overlay.style.display = 'none';
-      }, 500);
+  // Query param auto-loading for screenshots
+  const urlParams = new URLSearchParams(window.location.search);
+  const shot = urlParams.get('shot');
+  const seedParam = urlParams.get('seed');
+  if (seedParam) {
+    currentSeed = parseInt(seedParam, 10);
+    rng = mulberry32(currentSeed);
+  }
+  if (shot === 'start') {
+    screenActive = true;
+    openStartScreen(save, {});
+  } else if (shot === 'end') {
+    screenActive = true;
+    openGarageScreen(save, {});
+  } else if (shot === 'play') {
+    if (currentSeed === 14) {
+      window.__photo.load({
+        seed: 14,
+        save: 'canonical',
+        mode: 'drive',
+        job: 7,
+        jobStage: 0,
+        heat: 160,
+        dialogue: { speaker: 'MARA VOSS', text: 'Last one, wheelman. Bring it home clean.' },
+        event: 'JOB 7 STARTED — THE LONG FAREWELL'
+      });
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+      stageCover(camera.position, fwd);
+    } else if (currentSeed === 31) {
+      window.__photo.load({
+        seed: 31,
+        save: 'canonical',
+        mode: 'foot',
+        job: 1,
+        jobStage: 1
+      });
+      for (let i = 0; i < 6; i++) {
+        const offsetX = (i - 2.5) * 2.0;
+        const offsetZ = -8 - i * 1.5;
+        debugSetPed('worker', player.x + offsetX, player.z + offsetZ, 0);
+      }
+    } else {
+      screenActive = true;
+      openStartScreen(save, {
+        onContinue: () => {
+          screenActive = false;
+          const titleOverlay = document.getElementById('title-overlay');
+          if (titleOverlay) titleOverlay.style.display = 'none';
+          notify("RESUMED: CITY ACTIVE", 2500);
+        },
+        onNewGame: () => {
+          clearSave();
+          save = canonicalSave();
+          save.cash = 250;
+          save.rep = 0;
+          save.missionIndex = 0;
+          save.jobsDone = 0;
+          screenActive = false;
+          const titleOverlay = document.getElementById('title-overlay');
+          if (titleOverlay) titleOverlay.style.display = 'none';
+          notify("NEW GAME STARTED", 3000);
+        }
+      });
+    }
+  } else {
+    // Open START screen over frozen world
+    screenActive = true;
+    openStartScreen(save, {
+      onContinue: () => {
+        screenActive = false;
+        const titleOverlay = document.getElementById('title-overlay');
+        if (titleOverlay) titleOverlay.style.display = 'none';
+        notify("RESUMED: CITY ACTIVE", 2500);
+      },
+      onNewGame: () => {
+        clearSave();
+        save = canonicalSave();
+        save.cash = 250;
+        save.rep = 0;
+        save.missionIndex = 0;
+        save.jobsDone = 0;
+        screenActive = false;
+        const titleOverlay = document.getElementById('title-overlay');
+        if (titleOverlay) titleOverlay.style.display = 'none';
+        notify("NEW GAME STARTED", 3000);
+      }
     });
   }
 
   lastTime = performance.now();
   requestAnimationFrame(mainLoop);
+}
+
+let missionsContext = null;
+let economyContext = null;
+
+function registerShopInteractables() {
+  // Weapons Shop at SHOP_POS.weapons [320, 192]
+  registerInteractable({
+    pos: SHOP_POS.weapons,
+    radius: 4.0,
+    label: () => "Press E to Visit Gunsmith Shop",
+    action: () => {
+      openMenu({
+        title: "Gunsmith Shop",
+        rows: [
+          { label: "Purchase Armour ($150)", detail: "Full Body Protection", action: () => {
+            if (save.cash >= 150) {
+              save.cash -= 150;
+              save.armour = 100;
+              notify("Purchased Full Armour ($150)", 2500);
+            } else {
+              notify("Insufficient cash ($150)", 2000);
+            }
+            return 'close';
+          }},
+          { label: "Buy Ammo Refill ($100)", detail: "Restock Active Weapon Ammunition", action: () => {
+            if (save.cash >= 100) {
+              save.cash -= 100;
+              notify("Ammo Restocked ($100)", 2000);
+            } else {
+              notify("Insufficient cash ($100)", 2000);
+            }
+            return 'close';
+          }}
+        ],
+        onClose: () => { screenActive = false; }
+      });
+      screenActive = true;
+    }
+  });
+
+  // Respray Shop at SHOP_POS.spray [-384, -192]
+  registerInteractable({
+    pos: SHOP_POS.spray,
+    radius: 4.0,
+    label: () => missionsContext && missionsContext.resprayStageActive() ? "Press E for Mission Respray" : "Press E for Respray ($200)",
+    action: () => {
+      if (missionsContext && missionsContext.resprayStageActive()) {
+        respray();
+        notify("Mission Respray Completed!", 2500);
+      } else if (save.cash >= 200) {
+        save.cash -= 200;
+        respray();
+        notify("Vehicle resprayed & heat cleared! ($200)", 2500);
+      } else {
+        notify("Insufficient cash for respray ($200)", 2500);
+      }
+    }
+  });
+
+  // Chop Shop at SHOP_POS.chop [-320, -256]
+  registerInteractable({
+    pos: SHOP_POS.chop,
+    radius: 4.0,
+    label: () => "Press E at Chop Shop",
+    action: () => {
+      openMenu({
+        title: "Chop Shop & Contracts",
+        rows: [
+          { label: "View Active Contract", detail: economyContext && economyContext.contractInfo() ? economyContext.contractInfo() : "No active contract", disabled: !economyContext || !economyContext.currentContract() },
+          { label: "Deliver Car to Chop", detail: "Drive car into shop to chop for cash", action: () => { notify("Drive vehicle into chop shop bay.", 2500); return 'close'; }}
+        ],
+        onClose: () => { screenActive = false; }
+      });
+      screenActive = true;
+    }
+  });
+
+  // Garage at SHOP_POS.garage [-256, 448]
+  registerInteractable({
+    pos: SHOP_POS.garage,
+    radius: 4.0,
+    label: () => "Press E to Open Garage (Iris's Chop & Repair)",
+    action: () => {
+      const heatVal = getHeat();
+      if (heatVal >= 1) {
+        notify("Garage refused: Wanted level active (Clear Heat first)", 3000);
+        return;
+      }
+      screenActive = true;
+      openGarageScreen(save, {
+        onBack: () => {
+          screenActive = false;
+        },
+        onCarAction: (action, idx) => {
+          const owned = save.ownedCars[idx];
+          if (!owned) return;
+          if (action === 'repair') {
+            if (save.cash >= 80) {
+              save.cash -= 80;
+              owned.durability = 100;
+              notify(`Repaired ${owned.spec} for $80`, 2500);
+              openGarageScreen(save, { onBack: () => { screenActive = false; }, onCarAction: (a, i) => {} });
+            } else {
+              notify("Insufficient cash ($80)", 2000);
+            }
+          } else if (action === 'roll') {
+            closeCurrentScreen();
+            screenActive = false;
+            // Spawn owned car near garage
+            const car = spawnVehicle(owned.spec, SHOP_POS.garage.x + 5, SHOP_POS.garage.z, 0, scene);
+            car.durability = owned.durability;
+            enterVehicle(car);
+            notify(`Rolled out ${owned.spec}`, 2500);
+          } else if (action === 'chop') {
+            save.cash += 300;
+            save.ownedCars.splice(idx, 1);
+            notify("Chipped stored car for $300", 2500);
+            openGarageScreen(save, { onBack: () => { screenActive = false; }, onCarAction: (a, i) => {} });
+          }
+        }
+      });
+    }
+  });
+
+  // Safehouse / Travel at SHOP_POS.safehouse [-320, 320]
+  registerInteractable({
+    pos: SHOP_POS.safehouse,
+    radius: 4.0,
+    label: () => "Press E at Safehouse (Travel & Rest)",
+    action: () => {
+      openMenu({
+        title: "Safehouse District Fast Travel",
+        rows: [
+          { label: "Travel to Muelle (Docks)", detail: "Safehouse & Docks", action: () => { notify(economyContext.travelTo('muelle'), 2500); return 'close'; }},
+          { label: "Travel to Paseo (Boulevard)", detail: "Downtown Strip", action: () => { notify(economyContext.travelTo('paseo'), 2500); return 'close'; }},
+          { label: "Travel to Verde (Suburbs)", detail: "Residential Estates", action: () => { notify(economyContext.travelTo('verde'), 2500); return 'close'; }},
+          { label: "Travel to Ceniza (Industrial)", detail: "Warehouses & Docks", action: () => { notify(economyContext.travelTo('ceniza'), 2500); return 'close'; }},
+          { label: "Travel to Cumbre (Volcano)", detail: "Observatory & Ridge", action: () => { notify(economyContext.travelTo('cumbre'), 2500); return 'close'; }}
+        ],
+        onClose: () => { screenActive = false; }
+      });
+      screenActive = true;
+    }
+  });
+}
+
+function registerTrialInteractables() {
+  const trialPos = { x: -200, z: 200 };
+  registerInteractable({
+    pos: trialPos,
+    radius: 5.0,
+    label: () => "Press E to Start Time Trial ($100 fee)",
+    action: () => {
+      if (!player.isDriving) {
+        // Put player in nearby car first if on foot
+        const trafficCars = getTrafficCars();
+        if (trafficCars.length > 0) {
+          enterVehicle(trafficCars[0]);
+          notify("Entered vehicle for Time Trial", 2000);
+        } else {
+          notify("Get into a vehicle to start Time Trial", 2500);
+          return;
+        }
+      }
+      const res = economyContext.startTrial('dock');
+      notify(res, 3000);
+    }
+  });
 }
 
 function handleInteractPress() {
@@ -291,7 +749,7 @@ function enterVehicle(car) {
   notify(`ENTERED ${car.spec.name.toUpperCase()}`, 2000);
   const crimeType = car.spec.police ? 'policeCarSteal' : 'carjack';
   reportCrime(crimeType, { x: car.x, z: car.z }, witnessesAt(car.x, car.z, 45) > 0);
-  save.stolen++;
+  save.stats.carsStolen++;
 }
 
 function exitVehicle() {
@@ -314,11 +772,14 @@ function mainLoop(timestamp) {
   const frameDt = (timestamp - lastTime) / 1000;
   lastTime = timestamp;
 
-  accumulator += Math.min(0.1, frameDt);
-
-  while (accumulator >= FIXED_DT) {
-    fixedUpdate(FIXED_DT);
-    accumulator -= FIXED_DT;
+  if (screenActive) {
+    accumulator = 0; // Drain accumulator while screen/menu open (Sim PAUSES)
+  } else {
+    accumulator += Math.min(0.1, frameDt);
+    while (accumulator >= FIXED_DT) {
+      fixedUpdate(FIXED_DT);
+      accumulator -= FIXED_DT;
+    }
   }
 
   renderFrame();
@@ -326,11 +787,13 @@ function mainLoop(timestamp) {
 }
 
 function fixedUpdate(dt) {
+  lastCallout.age += dt;
+  lastDialogue.age += dt;
+
   const playerPos = player.isDriving ? { x: player.currentVehicle.x, z: player.currentVehicle.z } : { x: player.x, z: player.z };
   updateSun(playerPos.x, player.y, playerPos.z);
   updateTraffic(dt, player.isDriving ? player.currentVehicle : null);
 
-  // Gunshot events timer
   for (let i = gunshotEvents.length - 1; i >= 0; i--) {
     gunshotEvents[i].time -= dt;
     if (gunshotEvents[i].time <= 0) gunshotEvents.splice(i, 1);
@@ -344,7 +807,6 @@ function fixedUpdate(dt) {
     onBustedOrWasted(true);
   }
 
-  // Pedestrian run-over check
   if (player.isDriving && player.currentVehicle) {
     const car = player.currentVehicle;
     const peds = getPedestrians();
@@ -413,41 +875,18 @@ function fixedUpdate(dt) {
     }
   }
 
+  if (missionsContext) missionsContext.update(dt, playerPos, player.isDriving ? player.currentVehicle : null);
+  if (economyContext) economyContext.update(dt, playerPos);
+
   updateHudDisplay();
 }
 
 function updateHudDisplay() {
-  const cashEl = document.getElementById('hud-cash');
-  const repEl = document.getElementById('hud-rep');
-  const heatEl = document.getElementById('hud-heat');
-  const missionEl = document.getElementById('hud-mission');
-  const districtEl = document.getElementById('hud-district-name');
-  const autosaveEl = document.getElementById('hud-autosave');
-  const speedEl = document.getElementById('hud-speedometer');
-  const promptEl = document.getElementById('hud-prompt');
+  if (!hud) return;
 
-  if (cashEl) cashEl.textContent = `CASH: $${save.cash.toLocaleString()}`;
-  if (repEl) repEl.textContent = `REP: ${save.rep} (${save.repTitle})`;
-  if (heatEl) {
-    const heatVal = getHeat();
-    const stars = '★'.repeat(heatVal) + '☆'.repeat(5 - heatVal);
-    heatEl.textContent = `HEAT: ${stars}`;
-  }
-  if (missionEl) missionEl.textContent = missionState.name;
-  if (districtEl) {
-    const distId = districtAt(player.x, player.z).toUpperCase();
-    districtEl.textContent = `DISTRICT: ${distId}`;
-  }
-  if (autosaveEl) autosaveEl.textContent = `AUTOSAVE ${save.autosave}`;
-
-  if (speedEl) {
-    const speedKmh = player.isDriving && player.currentVehicle ? Math.round(Math.abs(player.currentVehicle.speed) * 3.6) : 0;
-    speedEl.textContent = `${speedKmh} KM/H`;
-  }
-
-  if (promptEl) {
-    let promptText = null;
-    let minDist = 2.2;
+  let promptText = null;
+  let minDist = 2.2;
+  if (!window.__photoActive) {
     for (const item of interactables) {
       const dx = player.x - item.pos.x;
       const dz = player.z - item.pos.z;
@@ -459,29 +898,56 @@ function updateHudDisplay() {
         }
       }
     }
+  }
 
-    if (!promptText && !player.isDriving) {
-      const trafficCars = getTrafficCars();
-      for (const car of trafficCars) {
-        const dx = player.x - car.x;
-        const dz = player.z - car.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist <= 2.5) {
-          promptText = `Press E to Carjack ${car.spec.name}`;
-          break;
-        }
+  // Mission steal car prompt ("E — STEAL")
+  if (missionsContext && missionsContext.jobActive() && !player.isDriving) {
+    const stageCar = missionsContext.stageCar();
+    if (stageCar) {
+      const dx = player.x - stageCar.x;
+      const dz = player.z - stageCar.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist <= 2.8) {
+        promptText = "E — STEAL";
       }
-    } else if (!promptText && player.isDriving) {
-      promptText = "Press E to Exit Vehicle";
-    }
-
-    if (promptText) {
-      promptEl.textContent = promptText;
-      promptEl.style.display = 'block';
-    } else {
-      promptEl.style.display = 'none';
     }
   }
+
+  if (!promptText && !player.isDriving && !window.__photoActive) {
+    const trafficCars = getTrafficCars();
+    for (const car of trafficCars) {
+      const dx = player.x - car.x;
+      const dz = player.z - car.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist <= 2.5) {
+        promptText = `Press E to Carjack ${car.spec.name}`;
+        break;
+      }
+    }
+  } else if (!promptText && player.isDriving && !window.__photoActive) {
+    promptText = "Press E to Exit Vehicle";
+  }
+
+  const snapshot = {
+    save,
+    player,
+    heat: getHeat(),
+    units: getUnits(),
+    mission: missionsContext ? missionsContext.currentObjective() : null,
+    marker: missionsContext ? missionsContext.marker() : null,
+    contract: economyContext ? economyContext.currentContract() : null,
+    trial: economyContext ? economyContext.activeTrial() : null,
+    callout: lastCallout,
+    dialogue: lastDialogue,
+    station: getCurrentStationInfo(save),
+    ammoLoaded: 12,
+    ammoReserve: 48,
+    prompt: promptText,
+    screenOpen: screenActive
+  };
+
+  hud.setPanels(screenActive ? 'off' : 'cover');
+  hud.update(snapshot);
 }
 
 function renderFrame() {
@@ -526,112 +992,25 @@ function computeStateHash() {
   return (hash >>> 0).toString(16);
 }
 
-window.__photo = {
-  load(spec) {
-    window.__photoActive = true;
-    const titleOverlay = document.getElementById('title-overlay');
-    if (titleOverlay) titleOverlay.style.display = 'none';
-    const dialogueBox = document.getElementById('hud-dialogue');
-    if (dialogueBox) dialogueBox.style.display = 'none';
-    const notifyBox = document.getElementById('hud-notify');
-    if (notifyBox) notifyBox.style.display = 'none';
-
-    if (spec && typeof spec.seed === 'number') {
-      currentSeed = spec.seed;
-      rng = mulberry32(currentSeed);
-    }
-
-    while(scene.children.length > 0) {
-      scene.remove(scene.children[0]);
-    }
-    buildCity(scene, rng);
-    initTraffic(scene, rng);
-    initPedestrians(scene, rng);
-    initPolice(scene);
-
-    if (spec && Array.isArray(spec.inputs)) {
-      for (const inp of spec.inputs) {
-        keys = inp.keys || {};
-        fixedUpdate(1/60);
-      }
-    }
-
-    if (spec && spec.state) {
-      if (spec.state.cash !== undefined) save.cash = spec.state.cash;
-      if (spec.state.rep !== undefined) save.rep = spec.state.rep;
-      if (spec.state.heat !== undefined) setPointsFloor(spec.state.heat * 30);
-      if (spec.state.mission !== undefined) missionState.name = spec.state.mission;
-      if (spec.state.x !== undefined) player.x = spec.state.x;
-      if (spec.state.z !== undefined) player.z = spec.state.z;
-      player.y = groundHeight(player.x, player.z);
-    }
-
-    renderFrame();
-  },
-  capture() {
-    if (!renderer) return '';
-    return renderer.domElement.toDataURL('image/jpeg', 0.9);
-  },
-  state() {
-    return {
-      seed: currentSeed,
-      hash: computeStateHash(),
-      player: { x: player.x, z: player.z },
-      save: gatherSave(),
-      heat: getHeat()
-    };
-  }
-};
 
 window.__calderaTest = {
-  state: () => ({ player, save, heat: getHeat(), missionState }),
+  state: () => ({ player, save, heat: getHeat(), heatPoints: getHeatPoints(), missionState, units: getUnits(), peds: getPedestrians() }),
   hash: () => computeStateHash(),
-  driveTour: () => {
-    const trafficCars = getTrafficCars();
-    if (trafficCars.length > 0) {
-      enterVehicle(trafficCars[0]);
-    }
+  project: (x, y, z) => {
+    const v = new THREE.Vector3(x, y, z);
+    v.project(camera);
+    const xPct = (v.x * 0.5 + 0.5) * 100;
+    const yPct = (-(v.y) * 0.5 + 0.5) * 100;
+    const inFrame = v.x >= -1 && v.x <= 1 && v.y >= -1 && v.y <= 1 && v.z < 1;
+    return { xPct, yPct, inFrame, ndcX: v.x, ndcY: v.y };
   },
-  onFootLoop: () => {
-    if (player.isDriving) exitVehicle();
+  stageCover: () => {
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    stageCover(camera.position, fwd);
   },
-  modules: ['main.js', 'city.js', 'vehicles.js', 'traffic.js', 'pedestrians.js', 'combat.js', 'police.js'],
-  step: (dt) => { fixedUpdate(dt || 1/60); renderFrame(); },
-  teleport: (x, z) => {
-    player.x = x;
-    player.z = z;
-    player.y = groundHeight(x, z);
-    if (player.isDriving && player.currentVehicle) {
-      player.currentVehicle.x = x;
-      player.currentVehicle.z = z;
-      player.currentVehicle.y = player.y;
-    }
-  },
-  spawnCar: (typeKey, x, z, angle, color) => spawnVehicle(typeKey, x, z, angle || 0, scene, color || 0x3366cc),
-  enterNearest: () => handleInteractPress(),
-  exitCar: () => exitVehicle(),
-  repairVehicle: () => {
-    if (player.isDriving && player.currentVehicle) {
-      player.currentVehicle.durability = 100;
-      player.currentVehicle.dead = false;
-    }
-  },
-  driveToward: (x, z) => {
-    if (player.isDriving && player.currentVehicle) {
-      const car = player.currentVehicle;
-      car.angle = Math.atan2(x - car.x, z - car.z);
-      car.speed = 15;
-    }
-  },
-  interactables: () => interactables,
-  interact: () => handleInteractPress(),
-  save: gatherSave(),
-  debugSetPed,
-  stageCover,
   coverAudit,
-  forceRoadblock,
-  setPointsFloor,
-  respray
+  debugSetPed,
+  step: (dt) => { fixedUpdate(dt || 1/60); renderFrame(); }
 };
 
 window.addEventListener('DOMContentLoaded', init);
