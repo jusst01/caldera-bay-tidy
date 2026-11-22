@@ -1,10 +1,13 @@
 // CALDERA BAY — game/main.js
-// Core boot, fixed-step 1/60 sim, chase cam, on-foot controller, carjacking, interactables, save state, photo mode, test hooks.
+// Core boot, fixed-step 1/60 sim, chase cam, on-foot controller, carjacking, combat, pedestrians, police integration, save state, photo mode, test hooks.
 
 import * as THREE from './three.module.min.js';
 import { buildCity, groundHeight, districtAt, collideCircle, eject, setFinaleDusk, updateSun } from './city.js';
 import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageVehicle, markStolen } from './vehicles.js';
 import { initTraffic, updateTraffic, getTrafficCars } from './traffic.js';
+import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian, debugSetPed } from './pedestrians.js';
+import { initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, damagePlayer, getCombatState, showWeaponWheel } from './combat.js';
+import { initPolice, reportCrime, setPointsFloor, respray, getHeat, getHeatPoints, getUnits, forceRoadblock, stageCover, coverAudit, updatePolice } from './police.js';
 
 // Seeded PRNG (Mulberry32)
 let currentSeed = 1337;
@@ -46,11 +49,6 @@ export function persistSave() {
   } catch (e) {}
 }
 
-export function applySaveToWorld(savedState) {
-  if (!savedState) return;
-  Object.assign(save, savedState);
-}
-
 // Game State & World
 let scene, camera, renderer;
 let player = {
@@ -60,19 +58,14 @@ let player = {
   angle: 0,
   speed: 4.0,
   isDriving: false,
-  currentVehicle: null,
-  ammo: 100,
-  health: 100
+  currentVehicle: null
 };
 
-let heat = 1;
 let missionState = { active: true, name: 'MISSION: 7 active', stage: 1 };
 let interactables = [];
 let keys = {};
-let carjackTimer = 0;
-let targetCarjackVehicle = null;
+let gunshotEvents = [];
 
-// HUD Notification & Dialogue
 export function notify(msg, duration = 3000) {
   const el = document.getElementById('hud-notify');
   if (!el) return;
@@ -96,7 +89,6 @@ export function dialogue(speaker, text, duration = 4000) {
   }, duration);
 }
 
-// Interactables Registry
 export function registerInteractable(item) {
   interactables.push(item);
   return () => {
@@ -105,41 +97,37 @@ export function registerInteractable(item) {
   };
 }
 
-// Safehouse interaction at Muelle
 registerInteractable({
   pos: { x: -300, z: 300 },
   radius: 3.5,
   label: () => "Press E to Save Game & Rest",
   action: () => {
     persistSave();
+    respray();
     notify("GAME SAVED AT MUELLE SAFEHOUSE", 2500);
-    dialogue("SAFEHOUSE", "Rested up. Cash and reputation secured.");
+    dialogue("SAFEHOUSE", "Rested up. Wanted level cleared, cash and reputation secured.");
   }
 });
 
-// Busted or Wasted ordering
 export function onBustedOrWasted(isBusted) {
   missionState.active = false;
   notify(isBusted ? "BUSTED!" : "WASTED!", 4000);
 
   if (isBusted) {
     save.cash = Math.max(0, Math.floor(save.cash * 0.9));
-    heat = 1;
+    respray();
   } else {
     save.cash = Math.max(0, save.cash - 200);
-    save.ammo = Math.floor(save.ammo / 2);
+    respray();
   }
 
   player.x = -300;
   player.z = 300;
   player.y = groundHeight(player.x, player.z);
   player.isDriving = false;
-  if (player.currentVehicle && player.currentVehicle.mesh) {
-    player.currentVehicle = null;
-  }
+  player.currentVehicle = null;
 }
 
-// Initialization
 function init() {
   const canvas = document.getElementById('game');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -152,6 +140,32 @@ function init() {
 
   buildCity(scene, rng);
   initTraffic(scene, rng);
+  initPedestrians(scene, rng);
+  initPolice(scene);
+
+  initCombat(scene, {
+    onGunshot: (pos) => {
+      gunshotEvents.push({ x: pos.x, z: pos.z, time: 2.0 });
+      const witnessCount = witnessesAt(pos.x, pos.z, 60);
+      if (witnessCount > 0) {
+        reportCrime('gunshot', pos, true);
+      }
+    },
+    onHit: (target, damage) => {
+      if (target.typeKey !== undefined) {
+        // Vehicle target
+        damageVehicle(target, damage);
+      } else if (target.arch !== undefined) {
+        // Pedestrian target
+        const dropped = damagePedestrian(target, damage);
+        if (dropped > 0) {
+          save.cash += dropped;
+          notify(`MUGGED PEDESTRIAN: +$${dropped}`, 2000);
+        }
+        reportCrime('mug', { x: target.x, z: target.z }, witnessesAt(target.x, target.z, 45) > 0);
+      }
+    }
+  });
 
   player.y = groundHeight(player.x, player.z);
 
@@ -169,13 +183,30 @@ function init() {
     if (e.key === 'f' || e.key === 'F') {
       handleMugPress();
     }
+    if (e.key === 'r' || e.key === 'R') {
+      reloadWeapon();
+    }
+    if (e.key === '1') switchWeapon(0);
+    if (e.key === '2') switchWeapon(1);
+    if (e.key === '3') switchWeapon(2);
+    if (e.key === '4') switchWeapon(3);
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      nextWeapon();
+    }
   });
 
   window.addEventListener('keyup', (e) => {
     keys[e.key.toLowerCase()] = false;
-    if (e.key === 'e' || e.key === 'E') {
-      carjackTimer = 0;
-      targetCarjackVehicle = null;
+  });
+
+  window.addEventListener('mousedown', (e) => {
+    if (e.button === 0 && !player.isDriving) {
+      const peds = getPedestrians();
+      const cars = getTrafficCars();
+      const unitsList = getUnits();
+      const allTargets = [...peds, ...cars, ...unitsList];
+      fireWeapon({ x: player.x, z: player.z }, player.angle, allTargets);
     }
   });
 
@@ -190,18 +221,10 @@ function init() {
     });
   }
 
-  const promptEl = document.getElementById('hud-prompt');
-  if (promptEl) {
-    promptEl.addEventListener('click', () => {
-      handleInteractPress();
-    });
-  }
-
   lastTime = performance.now();
   requestAnimationFrame(mainLoop);
 }
 
-// Interaction logic
 function handleInteractPress() {
   let nearestInteractable = null;
   let minDist = 2.2;
@@ -254,7 +277,7 @@ function handleMugPress() {
     if (dist <= 2.3) {
       save.cash += 50;
       notify("MUGGED DRIVER: +$50", 2000);
-      heat = Math.min(5, heat + 1);
+      reportCrime('mug', { x: car.x, z: car.z }, witnessesAt(car.x, car.z, 45) > 0);
       markStolen(car);
       break;
     }
@@ -266,9 +289,8 @@ function enterVehicle(car) {
   player.currentVehicle = car;
   markStolen(car);
   notify(`ENTERED ${car.spec.name.toUpperCase()}`, 2000);
-  if (car.spec.police) {
-    heat = Math.min(5, heat + (car.spec.stealHeat || 40));
-  }
+  const crimeType = car.spec.police ? 'policeCarSteal' : 'carjack';
+  reportCrime(crimeType, { x: car.x, z: car.z }, witnessesAt(car.x, car.z, 45) > 0);
   save.stolen++;
 }
 
@@ -283,7 +305,7 @@ function exitVehicle() {
   notify("EXITED VEHICLE", 1500);
 }
 
-// Simulation & Render Loop with Fixed-Step 1/60 accumulator
+// Simulation & Render Loop
 let accumulator = 0;
 let lastTime = 0;
 const FIXED_DT = 1 / 60;
@@ -304,8 +326,42 @@ function mainLoop(timestamp) {
 }
 
 function fixedUpdate(dt) {
-  updateSun(player.isDriving ? player.currentVehicle.x : player.x, player.y, player.isDriving ? player.currentVehicle.z : player.z);
+  const playerPos = player.isDriving ? { x: player.currentVehicle.x, z: player.currentVehicle.z } : { x: player.x, z: player.z };
+  updateSun(playerPos.x, player.y, playerPos.z);
   updateTraffic(dt, player.isDriving ? player.currentVehicle : null);
+
+  // Gunshot events timer
+  for (let i = gunshotEvents.length - 1; i >= 0; i--) {
+    gunshotEvents[i].time -= dt;
+    if (gunshotEvents[i].time <= 0) gunshotEvents.splice(i, 1);
+  }
+
+  updatePedestrians(dt, playerPos, getHeat(), gunshotEvents);
+  updateCombat(dt, playerPos, player.angle);
+
+  const policeResult = updatePolice(dt, playerPos, player.isDriving ? player.currentVehicle.speed : player.speed, player.isDriving);
+  if (policeResult === 'BUSTED') {
+    onBustedOrWasted(true);
+  }
+
+  // Pedestrian run-over check
+  if (player.isDriving && player.currentVehicle) {
+    const car = player.currentVehicle;
+    const peds = getPedestrians();
+    for (const ped of peds) {
+      const dx = car.x - ped.x;
+      const dz = car.z - ped.z;
+      if (dx * dx + dz * dz < 2.5 * 2.5) {
+        const dropped = damagePedestrian(ped, 50);
+        if (dropped > 0) {
+          save.cash += dropped;
+          notify(`RUN-OVER MUG: +$${dropped}`, 2000);
+        }
+        reportCrime('pedHit', { x: car.x, z: car.z }, witnessesAt(car.x, car.z, 45) > 0);
+        car.speed *= 0.6;
+      }
+    }
+  }
 
   if (player.isDriving && player.currentVehicle) {
     const car = player.currentVehicle;
@@ -373,7 +429,8 @@ function updateHudDisplay() {
   if (cashEl) cashEl.textContent = `CASH: $${save.cash.toLocaleString()}`;
   if (repEl) repEl.textContent = `REP: ${save.rep} (${save.repTitle})`;
   if (heatEl) {
-    const stars = '★'.repeat(heat) + '☆'.repeat(5 - heat);
+    const heatVal = getHeat();
+    const stars = '★'.repeat(heatVal) + '☆'.repeat(5 - heatVal);
     heatEl.textContent = `HEAT: ${stars}`;
   }
   if (missionEl) missionEl.textContent = missionState.name;
@@ -457,7 +514,7 @@ function computeStateHash() {
     pz: Math.round(player.z * 10),
     cash: save.cash,
     rep: save.rep,
-    heat,
+    heat: getHeat(),
     driving: player.isDriving
   };
   const str = JSON.stringify(stateObj);
@@ -489,6 +546,8 @@ window.__photo = {
     }
     buildCity(scene, rng);
     initTraffic(scene, rng);
+    initPedestrians(scene, rng);
+    initPolice(scene);
 
     if (spec && Array.isArray(spec.inputs)) {
       for (const inp of spec.inputs) {
@@ -500,7 +559,7 @@ window.__photo = {
     if (spec && spec.state) {
       if (spec.state.cash !== undefined) save.cash = spec.state.cash;
       if (spec.state.rep !== undefined) save.rep = spec.state.rep;
-      if (spec.state.heat !== undefined) heat = spec.state.heat;
+      if (spec.state.heat !== undefined) setPointsFloor(spec.state.heat * 30);
       if (spec.state.mission !== undefined) missionState.name = spec.state.mission;
       if (spec.state.x !== undefined) player.x = spec.state.x;
       if (spec.state.z !== undefined) player.z = spec.state.z;
@@ -519,13 +578,13 @@ window.__photo = {
       hash: computeStateHash(),
       player: { x: player.x, z: player.z },
       save: gatherSave(),
-      heat
+      heat: getHeat()
     };
   }
 };
 
 window.__calderaTest = {
-  state: () => ({ player, save, heat, missionState }),
+  state: () => ({ player, save, heat: getHeat(), missionState }),
   hash: () => computeStateHash(),
   driveTour: () => {
     const trafficCars = getTrafficCars();
@@ -536,7 +595,7 @@ window.__calderaTest = {
   onFootLoop: () => {
     if (player.isDriving) exitVehicle();
   },
-  modules: ['main.js', 'city.js', 'vehicles.js', 'traffic.js'],
+  modules: ['main.js', 'city.js', 'vehicles.js', 'traffic.js', 'pedestrians.js', 'combat.js', 'police.js'],
   step: (dt) => { fixedUpdate(dt || 1/60); renderFrame(); },
   teleport: (x, z) => {
     player.x = x;
@@ -566,7 +625,13 @@ window.__calderaTest = {
   },
   interactables: () => interactables,
   interact: () => handleInteractPress(),
-  save: gatherSave()
+  save: gatherSave(),
+  debugSetPed,
+  stageCover,
+  coverAudit,
+  forceRoadblock,
+  setPointsFloor,
+  respray
 };
 
 window.addEventListener('DOMContentLoaded', init);
