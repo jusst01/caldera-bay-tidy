@@ -480,7 +480,9 @@ function mainLoop(time) {
   lastTime = time;
   accumulator += Math.min(delta, 0.1);
   while (accumulator >= 1/60) {
-    stepSim(1/60);
+    if (!document.getElementById('screen-root').hasChildNodes()) {
+      stepSim(1/60);
+    }
     accumulator -= 1/60;
   }
 
