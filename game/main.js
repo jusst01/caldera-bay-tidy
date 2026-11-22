@@ -222,6 +222,11 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyG') {
     openGarageScreen(save, garageCallbacks);
   }
+  if (e.code === 'F5') {
+    e.preventDefault();
+    persistSave();
+    notify("Game Saved", 2000);
+  }
 });
 
 window.addEventListener('keyup', (e) => {

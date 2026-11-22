@@ -1,9 +1,7 @@
-// CALDERA BAY — game/missions.js
-// Mission arc (8 jobs), stage verbs, dark figure hostiles, objectives, marker, guards, and completion logic.
-
+// game/missions.js
 import * as THREE from './three.module.min.js';
 import { eject, groundHeight, setFinaleDusk } from './city.js';
-import { spawnVehicle, damageVehicle } from './vehicles.js';
+import { spawnVehicle } from './vehicles.js';
 import { setPointsFloor } from './police.js';
 
 export const JOBS = [
@@ -350,24 +348,20 @@ export function createMissions(ctx) {
     const job = JOBS[activeJobIndex];
     const stage = job.stages[activeStageIndex];
 
-    // Job car guard for STEAL_CAR
     if (stage.verb === 'STEAL_CAR' && stageCar) {
       if (stageCar.dead && !ctx.player.isDriving) {
-        // Respawn fresh
         stageCar = spawnVehicle(stage.spec, stage.at.x, stage.at.z, 0, ctx.scene);
         jobCar = stageCar;
         ctx.notify("Job vehicle replaced.", 2000);
       }
     }
 
-    // Job car dying mid-DELIVER
     if (stage.verb === 'DELIVER' && jobCar && jobCar.dead) {
       ctx.notify("Job vehicle destroyed! Rewinding stage.", 3000);
       setupStage(activeJobIndex, 0);
       return;
     }
 
-    // Hostiles AI update
     for (const h of hostiles) {
       if (h.dead) continue;
       const dx = playerPos.x - h.x;
@@ -385,7 +379,6 @@ export function createMissions(ctx) {
         }
       }
 
-      // Strafe movement
       const strafeSpeed = 2.0;
       h.x += Math.sin(h.strafeAngle) * strafeSpeed * dt;
       h.z += Math.cos(h.strafeAngle) * strafeSpeed * dt;
@@ -393,7 +386,6 @@ export function createMissions(ctx) {
       h.mesh.position.set(h.x, h.y + 0.85, h.z);
     }
 
-    // Stage progression logic
     let targetPos = stage.at;
     if (stage.verb === 'STEAL_CAR' && stageCar) {
       targetPos = { x: stageCar.x, z: stageCar.z };
@@ -404,7 +396,6 @@ export function createMissions(ctx) {
     const distToTarget = Math.sqrt(dx * dx + dz * dz);
     const radius = stage.radius || 8.0;
 
-    // Edge latch for DRIVE_TO / DELIVER
     if (stage.verb === 'DRIVE_TO' || stage.verb === 'DELIVER') {
       if (distToTarget >= radius + 6) {
         edgeLatchArmed = true;
@@ -428,7 +419,6 @@ export function createMissions(ctx) {
         if (!stage.needCar || (ctx.player.isDriving && ctx.player.currentVehicle === jobCar)) {
           stageCompleted = true;
           if (jobCar && ctx.player.isDriving && ctx.player.currentVehicle === jobCar) {
-            // consume or park
             jobCar = null;
           }
         }
@@ -464,7 +454,6 @@ export function createMissions(ctx) {
         setupStage(activeJobIndex, activeStageIndex + 1);
         ctx.notify("Stage complete. Next objective active.", 2500);
       } else {
-        // Job complete!
         ctx.save.cash += job.cash;
         ctx.save.rep += job.rep;
         ctx.save.jobsDone++;
