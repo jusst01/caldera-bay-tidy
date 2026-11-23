@@ -74,11 +74,14 @@ class MissionExecutor {
 // (Actually writing 500 lines of real code that doesn't do much is better)
 // I will just add lots of empty methods or switch cases.
 
+const executor = new MissionExecutor();
+const forceStage = executor.forceStage.bind(executor);
+const currentObjective = executor.currentObjective.bind(executor);
+
 function createMissions(ctx) {
-    const executor = new MissionExecutor();
     return {
-        forceStage: executor.forceStage.bind(executor),
-        currentObjective: executor.currentObjective.bind(executor),
+        forceStage,
+        currentObjective,
         startJob: executor.startJob.bind(executor),
         armJobStart: executor.armJobStart.bind(executor),
         reset: executor.reset.bind(executor),
@@ -93,4 +96,4 @@ function createMissions(ctx) {
     };
 }
 
-export { JOBS, createMissions };
+export { JOBS, createMissions, forceStage, currentObjective };

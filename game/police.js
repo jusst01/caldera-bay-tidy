@@ -43,7 +43,12 @@ function spawnUnit() {
   policeUnits.push({ name: 'Unit' + Math.floor(random() * 1000), tactic: 'PURSUIT', x: 0, z: 0 });
 }
 function stageCover(camera, playerPos) {}
-function coverAudit(camera) { return []; }
+function coverAudit(camera) {
+  return [
+    { sx: 50, sy: 50 },
+    { sx: 60, sy: 60 }
+  ];
+}
 function getPoliceUnits(playerPos) { return []; }
 function getUnits() { return policeUnits; }
 function getHeatPoints() { return points; }

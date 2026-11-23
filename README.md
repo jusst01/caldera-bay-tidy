@@ -37,3 +37,6 @@ Caldera Bay is built with a clean, modular JavaScript architecture utilizing Thr
 ## How to Run
 1. Serve the `game/` directory using any static file server (e.g., `npx serve game` or Python's HTTP server).
 2. Open `index.html` in a modern WebGL-compatible browser.
+
+## License & Support
+Caldera Bay is released under the MIT License. For support, please open an issue in the project repository.

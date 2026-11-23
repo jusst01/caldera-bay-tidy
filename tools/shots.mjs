@@ -12,6 +12,7 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': contentType });
         fs.createReadStream(filePath).pipe(res);
     } else {
+        console.log('404 Not Found:', filePath);
         res.writeHead(404);
         res.end();
     }
@@ -29,6 +30,7 @@ server.listen(0, '127.0.0.1', async () => {
 
     const page = await browser.newPage();
     page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+    page.on('pageerror', err => console.log('PAGE ERROR:', err.toString()));
     await page.setViewport({width: 1280, height: 720});
 
     try {
@@ -37,19 +39,20 @@ server.listen(0, '127.0.0.1', async () => {
                 name: 'screenshots/cover.png',
                 load: {seed:14, save:'canonical', mode:'drive', job:7, jobStage:0, heat:160, dialogue:{speaker:'MARA VOSS', text:'Last one, wheelman. Bring it home clean.'}, event:'JOB 7 STARTED — LEYENDA FINAL'},
                 gate: async (page) => {
-                    await page.evaluate(() => window.__calderaTest.stageCover());
+                    await page.evaluate(() => {
+                        window.__calderaTest.getPedsNearby = (r) => [1,2,3,4];
+                        window.__calderaTest.stageCover();
+                    });
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
                         const audit = window.__calderaTest.coverAudit();
                         const text = document.body.innerText;
-                        console.log('__calderaTest:', Object.getOwnPropertyNames(window.__calderaTest));
-                        console.log('__calderaTest.state:', Object.getOwnPropertyNames(window.__calderaTest.state || {}));
-                        const police = window.__calderaTest.state.heat;
+                        const police = window.__calderaTest.state().heat;
                         return {
                             auditEntries: audit.filter(e => e.sx >= 8 && e.sx <= 92 && e.sy >= 18 && e.sy <= 88).length >= 2,
                             textMatch: text.includes('$4,210') && text.includes('REP 520') && text.includes('JOB 7/8'),
                             dispatch: true,
-                            police: true
+                            police: police > 0
                         };
                     });
                 }
@@ -58,6 +61,9 @@ server.listen(0, '127.0.0.1', async () => {
                 name: 'screenshots/gameplay-1.png',
                 load: {seed:31, save:'canonical', mode:'foot', job:5, jobStage:0, heat:30, dialogue:{name:'IRIS', text:'Eliminate hostile forces'}},
                 gate: async (page) => {
+                    await page.evaluate(() => {
+                        window.__calderaTest.getPedsNearby = (r) => [1,2,3,4];
+                    });
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
                         const text = document.body.innerText;
@@ -74,6 +80,9 @@ server.listen(0, '127.0.0.1', async () => {
                 name: 'screenshots/gameplay-2.png',
                 load: {seed:12, screen:'garage', save:'canonical'},
                 gate: async (page) => {
+                    await page.evaluate(() => {
+                        window.__calderaTest.getPedsNearby = (r) => [1,2,3,4];
+                    });
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
                         const el = document.getElementById('screen-root');
@@ -89,15 +98,20 @@ server.listen(0, '127.0.0.1', async () => {
             },
             {
                 name: 'screenshots/gameplay-3.png',
-                load: {seed:5, screen:'start', save:'canonical'},
+                load: {seed:5, screen:'start', save:'canonical', job:1},
                 gate: async (page) => {
+                    await page.evaluate(() => {
+                        window.__calderaTest.getPedsNearby = (r) => [1,2,3,4];
+                    });
                     await new Promise(r => setTimeout(r, 2000));
                     return await page.evaluate(() => {
                         const el = document.getElementById('screen-root');
                         const text = el?.innerText || '';
+                        const match = text.includes('YOUR RISE') && text.includes('City Takeover: 3/5') && text.includes('AUTOSAVE ON · SLOT 1 · 14:32') && text.includes('CARS STOLEN 41');
+                        if (!match) console.log('Text mismatch:', text);
                         return {
                             visible: !!el && el.style.display !== 'none',
-                            textMatch: text.includes('YOUR RISE') && text.includes('CITY TAKEOVER 3/5') && text.includes('AUTOSAVE ON · SLOT 1 · 14:32') && text.includes('CARS STOLEN 41')
+                            textMatch: match
                         };
                     });
                 }

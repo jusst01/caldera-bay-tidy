@@ -49,9 +49,9 @@ export function openGarageScreen(save, callbacks) {
       <h1>IRIS'S GARAGE — CHOP & REPAIR</h1>
       <div style="display:flex">
         <div style="flex:1">
-          <h2>YOUR CARS (${save.ownedCars.length}/4)</h2>
+          <h2>YOUR CARS (${save.ownedCars.length}/6)</h2>
           ${save.ownedCars.map((car, i) => `
-            <div>${car.name} - ${car.condition}%
+            <div>${car.model} - ${car.condition}%
               <button id="repair-${i}">REPAIR $80</button>
               <button id="rollout-${i}">ROLL OUT</button>
               <button id="chop-${i}">CHOP</button>

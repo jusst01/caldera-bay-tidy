@@ -53,7 +53,9 @@ function canonicalSave() {
       { model: 'Zorro GT', condition: 86 },
       { model: 'Corsario S', condition: 91 },
       { model: 'Mula 4x4', condition: 74 },
-      { model: 'Sirena', condition: 100 }
+      { model: 'Sirena', condition: 100 },
+      { model: 'Bravado', condition: 50 },
+      { model: 'Sentinel', condition: 30 }
     ],
     stats: {
       carsStolen: 41,
@@ -69,21 +71,12 @@ function canonicalSave() {
   };
 }
 
-function takeoverCount() {
-  let count = 0;
-  const t = canonicalSave().takeover; // Needs to use current state
-  // But wait, the contract says "canonicalSave() returns EXACTLY...",
-  // and "takeoverCount() counts districts with value > 30 (canonical = 3)."
-  // I should probably pass a `state` object or make it a method on the save object.
-  // The prompt says "takeoverCount() counts districts...".
-  // I'll make it take the current save state.
-  return count;
-}
+
 // Rethink: Maybe `takeoverCount` should be exported to take a save object?
 // "save.js exports: REP_TIERS, tierFor, emptySave, canonicalSave, takeoverCount, loadSave, saveSave, clearSave."
 // Let's adjust `takeoverCount`.
 
-function getTakeoverCount(saveState) {
+function takeoverCount(saveState) {
   return Object.values(saveState.takeover).filter(v => v > 30).length;
 }
 
@@ -107,4 +100,4 @@ function clearSave() {
   localStorage.removeItem('caldera_save_v1');
 }
 
-export { REP_TIERS, tierFor, emptySave, canonicalSave, getTakeoverCount as takeoverCount, loadSave, saveSave, clearSave };
+export { REP_TIERS, tierFor, emptySave, canonicalSave, takeoverCount, loadSave, saveSave, clearSave };

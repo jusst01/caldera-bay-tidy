@@ -115,7 +115,7 @@ window.__photo = {
             cash: save.cash,
             rep: save.rep,
             tier: tierFor(save.rep),
-            takeoverCount: takeoverCount(),
+            takeoverCount: takeoverCount(save),
             jobsDone: save.jobsDone,
             objective: currentObjective(),
             dialogue: spec.dialogue,
