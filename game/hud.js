@@ -1,109 +1,112 @@
 export function createHud(hooks) {
   const root = document.getElementById('hud-root');
   root.innerHTML = '';
-  const panels = {};
+  root.style.position = 'fixed';
+  root.style.left = '0';
+  root.style.top = '0';
+  root.style.width = '100%';
+  root.style.height = '100%';
+  root.style.pointerEvents = 'none';
 
-  const createPanel = (id, style) => {
+  const panel = (id, style) => {
     const el = document.createElement('div');
     el.id = id;
-    Object.assign(el.style, {
-      position: 'fixed',
-      zIndex: 5,
-      background: 'rgba(0,0,0,0.7)',
-      color: '#fff',
-      padding: '10px',
-      ...style
-    });
+    Object.assign(el.style, { position: 'fixed', zIndex: 5, backgroundColor: 'rgba(0,0,0,0.7)', color: '#fff', padding: '10px', fontSize: '14px', ...style });
     root.appendChild(el);
     return el;
   };
 
-  panels.mission = createPanel('hud-mission', { left: '16px', top: '16px', width: '300px' });
-  panels.dispatch = createPanel('hud-dispatch', { left: '16px', top: '196px', width: '280px' });
-  panels.topRight = createPanel('hud-top-right', { right: '16px', top: '16px', textAlign: 'right' });
-  panels.takeover = createPanel('hud-takeover', { left: '50%', transform: 'translateX(-50%)', top: '16px', width: '320px', textAlign: 'center' });
-  panels.status = createPanel('hud-status', { left: '200px', bottom: '16px' });
-  panels.minimap = createPanel('hud-minimap', { left: '16px', bottom: '16px', width: '180px', height: '180px', padding: '0' });
-  panels.vehicle = createPanel('hud-vehicle', { right: '16px', bottom: '16px', width: '200px' });
-  panels.weapon = createPanel('hud-weapon', { left: '200px', bottom: '60px' });
-  panels.radio = createPanel('hud-radio', { right: '16px', bottom: '150px', width: '200px' });
-  panels.dialogue = createPanel('hud-dialogue', { left: '50%', transform: 'translateX(-50%)', bottom: '100px', textAlign: 'center', display: 'none' });
-  panels.callout = createPanel('hud-callout', { left: '50%', top: '50%', transform: 'translate(-50%, -50%)', display: 'none' });
-  panels.prompt = createPanel('hud-prompt', { left: '50%', bottom: '20px', transform: 'translateX(-50%)' });
-  panels.eventLine = createPanel('hud-event', { left: '50%', top: '60px', transform: 'translateX(-50%)' });
+  const mission = panel('hud-mission', { left: '16px', top: '16px', width: '300px' });
+  const dispatch = panel('hud-dispatch', { left: '16px', top: '196px', width: '280px' });
+  const topRight = panel('hud-top-right', { right: '16px', top: '16px', width: '200px', textAlign: 'right' });
+  const takeover = panel('hud-takeover', { left: '50%', transform: 'translateX(-50%)', top: '16px', width: '320px', textAlign: 'center' });
+  const status = panel('hud-status', { left: '16px', bottom: '200px', width: '200px' });
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 180;
-  canvas.height = 180;
-  panels.minimap.appendChild(canvas);
-  const ctx = canvas.getContext('2d');
+  const minimapCanvas = document.createElement('canvas');
+  minimapCanvas.width = 180;
+  minimapCanvas.height = 180;
+  minimapCanvas.style.position = 'fixed';
+  minimapCanvas.style.left = '16px';
+  minimapCanvas.style.bottom = '16px';
+  minimapCanvas.style.zIndex = '5';
+  root.appendChild(minimapCanvas);
+  const ctx = minimapCanvas.getContext('2d');
 
-  let lastUnits = null;
+  const vehicleCard = panel('hud-vehicle', { right: '16px', bottom: '16px', width: '250px' });
+  const weaponRow = panel('hud-weapon', { left: '210px', bottom: '16px', width: '300px' });
+  const radioCard = panel('hud-radio', { right: '16px', bottom: '250px', width: '200px', textAlign: 'right' });
+  const dialogueCard = panel('hud-dialogue', { left: '50%', transform: 'translateX(-50%)', bottom: '100px', width: '400px', textAlign: 'center' });
+  const callout = panel('hud-callout', { left: '50%', transform: 'translateX(-50%)', top: '50%', textAlign: 'center' });
+  const prompt = panel('hud-prompt', { left: '50%', transform: 'translateX(-50%)', bottom: '50px', textAlign: 'center' });
+  const eventLine = panel('hud-event', { left: '50%', transform: 'translateX(-50%)', top: '70px', width: '400px', textAlign: 'center' });
 
   return {
     update(snapshot) {
       if (snapshot.objective) {
-        panels.mission.textContent = `JOB ${snapshot.objective.missionIndex + 1}/8 — ${snapshot.objective.jobLabel}\n${snapshot.objective.objective}`;
-        panels.mission.style.display = 'block';
+        mission.textContent = `JOB ${snapshot.objective.missionIndex + 1}/8 — ${snapshot.objective.jobLabel}: ${snapshot.objective.objective}`;
+        mission.style.display = 'block';
       } else {
-        panels.mission.style.display = 'none';
+        mission.style.display = 'none';
       }
 
-      if (snapshot.police.units !== lastUnits) {
-        lastUnits = snapshot.police.units;
-        panels.dispatch.innerHTML = '<strong>Dispatch</strong><br/>' +
-          snapshot.police.units.map(u => `${u.name}: ${u.tactic} (${Math.round(u.dist)}m)`).join('<br/>');
-      }
+      dispatch.innerHTML = '<strong>Dispatch</strong>';
+      snapshot.police.units.forEach(u => {
+        const row = document.createElement('div');
+        row.textContent = `${u.name}: ${u.tactic} (${Math.round(u.dist)}m)`;
+        dispatch.appendChild(row);
+      });
 
-      panels.topRight.innerHTML = `Heat: ${'★'.repeat(snapshot.heat)}<br/>$${snapshot.cash.toLocaleString()}<br/>REP ${snapshot.rep} · ${snapshot.tier}`;
-      panels.takeover.textContent = `Takeover Progress: ${snapshot.takeoverCount}/5 Districts`;
-      panels.status.innerHTML = `HP: ${snapshot.player.hp}%<br/>AR: ${snapshot.player.armour}%<br/>AMMO: ${snapshot.player.ammo}`;
+      topRight.innerHTML = `Heat: ${'★'.repeat(snapshot.heat)}<br>$${snapshot.cash.toLocaleString()}<br>REP ${snapshot.rep} · ${snapshot.tier}`;
+      takeover.textContent = `Takeover Progress: ${snapshot.takeoverCount}/5 Districts`;
+      status.textContent = `HP: ${snapshot.player.hp}% | AR: ${snapshot.player.armour}% | AMMO: ${snapshot.player.ammo}`;
 
-      ctx.fillStyle = '#1a2a3a';
+      // Minimap drawing
+      ctx.fillStyle = '#111';
       ctx.fillRect(0, 0, 180, 180);
-      ctx.fillStyle = '#2a4a6a';
-      ctx.fillRect(40, 40, 100, 100);
-      ctx.fillStyle = 'red';
-      snapshot.police.units.forEach(u => ctx.fillRect(180/2 + (Math.random()-0.5)*50, 180/2 + (Math.random()-0.5)*50, 4, 4));
-      ctx.fillStyle = 'white';
+      // Simplified: draw a player arrow and some units
+      ctx.fillStyle = '#0f0';
       ctx.beginPath();
-      ctx.moveTo(90, 80); ctx.lineTo(95, 100); ctx.lineTo(85, 100); ctx.fill();
-      ctx.fillStyle = 'yellow';
-      ctx.fillRect(150, 150, 10, 10);
+      ctx.moveTo(90, 80); ctx.lineTo(80, 100); ctx.lineTo(100, 100);
+      ctx.fill();
 
-      panels.eventLine.textContent = snapshot.eventLine;
-      panels.radio.textContent = snapshot.radio || 'OFF';
-      if (snapshot.player.inCar) {
-        panels.vehicle.textContent = 'Vehicle Status: OK';
-        panels.vehicle.style.display = 'block';
+      snapshot.police.units.forEach(u => {
+        ctx.fillStyle = '#f00';
+        ctx.beginPath();
+        ctx.arc(Math.random() * 180, Math.random() * 180, 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      vehicleCard.textContent = snapshot.player.inCar ? 'Vehicle: Active' : 'On Foot';
+      weaponRow.textContent = 'Weapon: Loaded';
+      radioCard.textContent = `Radio: ${snapshot.radio || 'OFF'}`;
+      if (snapshot.dialogue) {
+        dialogueCard.textContent = `${snapshot.dialogue.name || snapshot.dialogue.speaker}: ${snapshot.dialogue.text}`;
+        dialogueCard.style.display = 'block';
       } else {
-        panels.vehicle.style.display = 'none';
+        dialogueCard.style.display = 'none';
       }
+      eventLine.textContent = snapshot.eventLine || '';
     },
     setPanels(mode) {
-      const all = Object.values(panels);
-      if (mode === 'game') {
-        all.forEach(p => p.style.display = 'block');
-        panels.radio.style.display = 'block';
-        panels.dialogue.style.display = 'none';
-        panels.weapon.style.opacity = '1';
-      } else if (mode === 'cover') {
-        panels.mission.style.display = 'block';
-        panels.dispatch.style.display = 'block';
-        panels.topRight.style.display = 'block';
-        panels.minimap.style.display = 'block';
-        panels.vehicle.style.display = 'block';
-        panels.takeover.style.display = 'block';
-        panels.weapon.style.opacity = '0.4';
-        panels.radio.style.display = 'none';
-        panels.dialogue.style.display = 'none';
+      const display = mode === 'game' ? 'block' : 'none';
+      [mission, dispatch, topRight, takeover, status, vehicleCard, weaponRow].forEach(p => p.style.display = display);
+      if (mode === 'cover') {
+        weaponRow.style.opacity = '0.4';
+        radioCard.style.display = 'none';
+        dialogueCard.style.display = 'none';
       } else {
-        all.forEach(p => p.style.display = 'none');
+        weaponRow.style.opacity = '1';
+        radioCard.style.display = display;
+      }
+      if (['garage', 'start'].includes(mode)) {
+        root.style.display = 'none';
+      } else {
+        root.style.display = 'block';
       }
     },
     showDialogue(name, text) {
-      panels.dialogue.style.display = 'block';
-      panels.dialogue.innerHTML = `<strong>${name?.name || name?.speaker || 'Unknown'}</strong><br/>${text || name?.text}`;
+      dialogueCard.textContent = `${name}: ${text}`;
+      dialogueCard.style.display = 'block';
     }
   };
 }
