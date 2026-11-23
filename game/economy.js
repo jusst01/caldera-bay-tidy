@@ -1,6 +1,6 @@
 import * as THREE from './three.module.min.js';
 
-const SHOP_POS = {
+export const SHOP_POS = {
     weapons: [320, 192],
     spray: [-384, -192],
     chop: [-320, -256],
@@ -8,29 +8,27 @@ const SHOP_POS = {
     safehouse: [-320, 320]
 };
 
-const PRICES = {
+export const PRICES = {
     ammo: [0, 30, 60, 120],
     armour: 150,
     respray: 200,
     repair: 80
 };
 
-const TIME_TRIALS = [
+export const TIME_TRIALS = [
     { name: 'DOCK SPRINT', cp: 4, time: 70, cash: 300, rep: 15 },
     { name: 'BOULEVARD LOOP', cp: 6, time: 105, cash: 500, rep: 20 },
     { name: 'RIDGE CLIMB', cp: 5, time: 125, cash: 800, rep: 25 }
 ];
 
-function createEconomy(ctx) {
+export function createEconomy(ctx) {
     return {
-        contractInfo: () => {},
-        trialInfo: () => {},
-        travelTo: (districtId) => {},
-        buyAmmo: (slot) => {},
-        buyArmour: () => {},
-        storeCurrentCar: () => {},
-        recallCar: (i) => {}
+        contractInfo() { return null; },
+        trialInfo() { return TIME_TRIALS; },
+        travelTo(districtId) { return true; },
+        buyAmmo(slot) { return PRICES.ammo[slot]; },
+        buyArmour() { return PRICES.armour; },
+        storeCurrentCar() { return true; },
+        recallCar(i) { return true; }
     };
 }
-
-export { SHOP_POS, PRICES, TIME_TRIALS, createEconomy };
