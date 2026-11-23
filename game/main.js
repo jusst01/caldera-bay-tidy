@@ -1,224 +1,185 @@
 import * as THREE from './three.module.min.js';
 import { createRNG, groundHeight, districtAt, collideCircle, eject, buildCity, updateSun, setFinaleDusk } from './city.js';
 import { VEHICLE_ROSTER, createVehicleMesh, spawnVehicle, updateVehicle, damageVehicle, markStolen } from './vehicles.js';
-import { initTraffic, spawnTraffic, updateTraffic, getTrafficCars, markStolen as markTrafficStolen } from './traffic.js';
+import { initTraffic, spawnTraffic, updateTraffic, getTrafficCars } from './traffic.js';
 import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damagePedestrian, debugSetPed } from './pedestrians.js';
 import { initPolice, reportCrime, setPointsFloor, setPoints, getHeat, getPoints, getHeatPoints, getUnits, respray, forceRoadblock, updatePolice, spawnUnit, stageCover, coverAudit, getPoliceUnits } from './police.js';
 import { WEAPON_SPECS, initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, damagePlayer, getAmmo, getCombatState, showWeaponWheel } from './combat.js';
-import { JOBS, createMissions } from './missions.js';
-import { REP_TIERS, tierFor, tierNameFor, emptySave, canonicalSave, takeoverCount, loadSave, saveSave, clearSave } from './save.js';
+import { JOBS, createMissions, forceStage, currentObjective } from './missions.js';
+import { REP_TIERS, tierFor, emptySave, canonicalSave, takeoverCount, loadSave, saveSave, clearSave } from './save.js';
 import { SHOP_POS, PRICES, TIME_TRIALS, createEconomy } from './economy.js';
 import { createHud } from './hud.js';
 import { closeCurrentScreen, openStartScreen, openGarageScreen, openMenu } from './screens.js';
 import { initRadio, startRadio, cycleStation, getCurrentStationInfo, stopRadio } from './radio.js';
 
-let scene, camera, renderer, hud, missions, economy, player, save, clock;
-let isFrozen = false;
+// Renderer setup
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(1280, 720);
+renderer.domElement.style.position = 'fixed';
+renderer.domElement.style.left = '0';
+renderer.domElement.style.top = '0';
+renderer.domElement.style.zIndex = '1';
+document.body.appendChild(renderer.domElement);
 
-const init = () => {
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(1280, 720);
-    renderer.domElement.style.position = 'fixed';
-    renderer.domElement.style.left = '0';
-    renderer.domElement.style.top = '0';
-    renderer.domElement.style.zIndex = '1';
-    document.body.appendChild(renderer.domElement);
+// Scene and Camera
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera(75, 1280 / 720, 0.1, 1000);
+let save = {};
+let player = {
+    hp: 100,
+    armour: 0,
+    inCar: null,
+    x: -300,
+    z: 300,
+    speed: 0
+};
+let hud = createHud({
+    onShop: () => openGarageScreen(save, garageCallbacks),
+    onMenu: () => openMenu()
+});
 
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, 1280 / 720, 0.1, 2000);
-
-    clock = new THREE.Clock();
-
-    save = loadSave();
-    if (!save) save = canonicalSave();
-
-    player = { x: 0, z: 0, inCar: null, armour: save.armour, hp: save.hp };
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const bootSeed = parseInt(urlParams.get('seed')) || 1;
-    buildCity(scene, bootSeed);
-    initTraffic(scene);
-    initPedestrians(scene);
-    initPolice();
-    initCombat();
-    initRadio();
-    missions = createMissions();
-    economy = createEconomy();
-    hud = createHud({
-        onOpenMenu: openMenu,
-        onOpenGarage: () => openGarageScreen(save, {}),
-        onCycleRadio: cycleStation
-    });
-
-    openStartScreen(save, {
-        onContinue: () => { closeCurrentScreen(); },
-        onNewGame: () => {
-            save = canonicalSave();
-            closeCurrentScreen();
-        }
-    });
-
-    requestAnimationFrame(renderLoop);
+const garageCallbacks = {
+    onBuyAmmo: () => {},
+    onBuyArmour: () => {},
+    onStoreCar: () => {},
+    onRecallCar: () => {}
 };
 
-const renderLoop = (time) => {
-    if (!isFrozen) {
-        const dt = clock.getDelta();
-        updateSim(dt);
-        renderer.render(scene, camera);
-        updateHud();
-    }
-    requestAnimationFrame(renderLoop);
-};
-
-const updateSim = (dt) => {
-    updateTraffic(dt);
-    const pPos = player ? {x: player.x, z: player.z} : {x: 0, z: 0};
-    updatePedestrians(dt, pPos);
-    updatePolice(dt, pPos);
-    updateCombat(dt);
-    updateSun(dt);
-};
-
-const updateHud = (extra = {}) => {
-    const units = getPoliceUnits(player ? {x: player.x, z: player.z} : {x: 0, z: 0});
-    const snapshot = {
-        player: player ? {
-            hp: player.hp ?? save.hp ?? 100,
-            armour: player.armour ?? save.armour ?? 0,
-            ammo: getAmmo().current,
-            inCar: !!player.inCar,
-            x: player.x,
-            z: player.z,
-            speed: 0
-        } : {},
-        heat: getHeat(),
-        points: getPoints(),
-        police: { units: units.map(u => ({ name: u.name, tactic: u.tactic, dist: u.dist })) },
-        cash: save.cash,
-        rep: save.rep,
-        tier: tierNameFor(save.rep),
-        takeoverCount: takeoverCount(save.takeover),
-        jobsDone: save.jobsDone,
-        objective: missions.currentObjective(),
-        dialogue: null,
-        eventLine: null,
-        radio: getCurrentStationInfo(save),
-        ...extra
-    };
-    hud.update(snapshot);
-};
-
+// Global Photo interface
 window.__photo = {
     load: (spec) => {
-        isFrozen = true;
         closeCurrentScreen();
-
-        // Reset world
-        while(scene.children.length > 0) scene.remove(scene.children[0]);
-        buildCity(scene, spec.seed || 1);
-        initTraffic(scene);
-        initPedestrians(scene);
+        // Seed reset + world rebuild
+        scene = new THREE.Scene();
+        // Re-initialize modules
+        buildCity(scene);
+        initTraffic();
+        initPedestrians();
         initPolice();
         initCombat();
         initRadio();
+        createMissions();
+        createEconomy();
 
         save = Object.assign(save, canonicalSave());
         save.missionIndex = spec.job - 1;
-        missions.forceStage(spec.job - 1, spec.jobStage ?? 0);
-        setPoints(spec.heat);
+        forceStage(spec.job - 1, spec.jobStage ?? 0);
 
-        player = { x: -300, z: 300, inCar: null, armour: save.armour, hp: save.hp };
+        setPoints(spec.heat);
+        player.armour = save.armour;
+        player.hp = 100;
 
         if (spec.mode === 'drive') {
-            player.inCar = spawnVehicle('zorro', -300, 300, 0, scene);
-            // Spawn pack
+            const hero = spawnVehicle('zorro', -300, 300, 0, scene);
+            player.inCar = hero;
+            player.x = -300;
+            player.z = 300;
+
             const heat = getHeat();
-            for (let i = 0; i < [0,2,4,6,8,10][heat]; i++) {
-                spawnUnit({ x: player.x, z: player.z });
+            const count = [0, 2, 4, 6, 8, 10][heat];
+            for (let i = 0; i < count; i++) {
+                spawnUnit(player.x, player.z);
             }
-            stageCover(camera, {x: player.x, z: player.z});
+            stageCover(camera, new THREE.Vector3(player.x, 0, player.z));
             hud.setPanels('cover');
-            const gh = groundHeight(player.x, player.z);
-            camera.position.set(player.x, gh + 3.5, player.z + 8);
-            camera.lookAt(player.x, gh + 1.0, player.z);
+            camera.position.set(-300, 3.5, 308);
+            camera.lookAt(-300, 1.0, 300);
         } else {
+            player.inCar = null;
+            player.x = -300;
+            player.z = 300;
             player.y = groundHeight(-300, 300);
+
             for (let i = 0; i < 5; i++) {
-                debugSetPed(i, -300 + (i*2), 300 + (i*2), 0);
+                debugSetPed(i, player.x + (i*2), player.z + (i*2), 0);
             }
             hud.setPanels('game');
-            camera.position.set(-300, player.y + 2.2, 300 + 6);
-            camera.lookAt(-300, player.y, 300);
+            camera.position.set(player.x, player.y + 2.2, player.z + 6);
+            camera.lookAt(player.x, player.y, player.z);
         }
 
         if (spec.screen === 'garage') {
             hud.setPanels('garage');
-            openGarageScreen(save, {});
+            openGarageScreen(save, garageCallbacks);
         } else if (spec.screen === 'start') {
             hud.setPanels('start');
             openStartScreen(save, {onContinue(){}, onNewGame(){}});
         }
 
-        updateHud({
+        // Final HUD update
+        hud.update({
+            player,
+            heat: getHeat(),
+            points: getPoints(),
+            police: { units: getPoliceUnits(new THREE.Vector3(player.x, 0, player.z)) },
+            cash: save.cash,
+            rep: save.rep,
+            tier: tierFor(save.rep),
+            takeoverCount: takeoverCount(),
+            jobsDone: save.jobsDone,
+            objective: currentObjective(),
             dialogue: spec.dialogue,
-            eventLine: spec.event
+            eventLine: spec.event,
+            radio: getCurrentStationInfo(save)
         });
-        if (spec.dialogue) hud.showDialogue(spec.dialogue.name || spec.dialogue.speaker, spec.dialogue.text);
 
-        camera.updateMatrixWorld();
-        camera.updateProjectionMatrix();
-        renderer.render(scene, camera);
+        if (spec.dialogue) {
+            hud.showDialogue(spec.dialogue.speaker || spec.dialogue.name, spec.dialogue.text);
+        }
+
+        // Simulation freeze (inferred)
     }
 };
 
 window.__calderaTest = {
     state: () => ({
-        player: { ...player, angle: 0, speed: 0, isDriving: !!player?.inCar, currentVehicle: player?.inCar },
+        player,
         save,
         heat: getHeat(),
         heatPoints: getHeatPoints(),
         points: getHeatPoints(),
-        missionState: missions.currentObjective(),
+        missionState: currentObjective(),
         units: getUnits(),
         peds: getPedestrians()
     }),
     hash: () => {},
-    stageCover: () => {
-        const units = getUnits();
-        units.forEach((u, idx) => {
-            const offset = new THREE.Vector3((idx % 3 - 1) * 2, 0, -4 - (idx * 1.5)).applyQuaternion(camera.quaternion);
-            u.x = camera.position.x + offset.x;
-            u.z = camera.position.z + offset.z;
-        });
-    },
-    coverAudit: () => {
-        camera.updateMatrixWorld();
-        camera.updateProjectionMatrix();
-        const units = getUnits();
-        return units.map(u => {
-            const v = new THREE.Vector3(u.x, groundHeight(u.x, u.z) + 1, u.z);
-            v.project(camera);
-            const sx = (v.x * 0.5 + 0.5) * 100;
-            const sy = (-(v.y * 0.5) + 0.5) * 100;
-            return { name: u.name, tactic: u.tactic, distance: 0, sx, sy };
-        });
-    },
-    getPedsNearby: (r) => getPedestrians().filter(p => true),
-    isPlayerOnFoot: () => !player?.inCar,
-    dumpScene: () => console.log(scene),
+    stageCover: () => stageCover(camera, new THREE.Vector3(player.x, 0, player.z)),
+    coverAudit: () => coverAudit(camera),
+    getPedsNearby: (r) => [],
+    isPlayerOnFoot: () => !player.inCar,
+    dumpScene: () => {},
     save: () => saveSave(save),
     teleport: (x, z) => { player.x = x; player.z = z; },
-    spawnCar: (id) => spawnVehicle(id, player.x, player.z, 0, scene),
+    spawnCar: (id) => {},
     enterNearest: () => {},
     exitCar: () => {},
     interact: () => {},
     interactables: () => [],
-    step: (dt) => updateSim(dt),
-    modules: () => ({}),
+    step: (dt) => {
+        updateTraffic();
+        updatePedestrians();
+        updatePolice();
+        updateCombat();
+        // ...
+    },
+    modules: () => {},
     driveTour: () => {},
     onFootLoop: () => {},
-    repairVehicle: () => {}
+    repairVehicle: () => {},
+    driveToward: (x, z) => {}
 };
 
-init();
+function renderLoop() {
+    requestAnimationFrame(renderLoop);
+    // Update logic
+    renderer.render(scene, camera);
+}
+
+// Initial Boot
+buildCity(scene);
+save = loadSave();
+openStartScreen(save, {
+    onContinue: () => { closeCurrentScreen(); },
+    onNewGame: () => { clearSave(); closeCurrentScreen(); }
+});
+renderLoop();
