@@ -1,32 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Caldera Bay</title>
-  <style>
-    body { margin: 0; overflow: hidden; background: #000; }
-    #game { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-    #hud, #hud-notify, #hud-root, #screen-root, #start-btn, #status, #title-overlay {
-      position: absolute; z-index: 2; pointer-events: none;
-    }
-    #start-btn { pointer-events: auto; }
-  </style>
-  <script type="importmap">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caldera Bay</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: #0b0e14;
+            color: #f0f4f8;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+        canvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #game {
+            position: fixed;
+            inset: 0;
+        }
+        #hud-root, #screen-root {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #hud-root > *, #screen-root > * {
+            pointer-events: auto;
+        }
+        #hud {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            z-index: 20;
+        }
+        #hud-notify {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 20;
+        }
+        #title-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #162032 0%, #0b0e14 100%);
+            z-index: 1000;
+            transition: opacity 0.4s ease;
+        }
+        #title-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        h1 {
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-weight: 900;
+            letter-spacing: 0.15em;
+            margin: 0 0 10px 0;
+            color: #ffffff;
+            text-shadow: 0 0 20px rgba(0, 200, 255, 0.4);
+        }
+        .subline {
+            font-size: clamp(0.9rem, 2vw, 1.2rem);
+            letter-spacing: 0.25em;
+            color: #8fa3bf;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+        }
+        #start-btn {
+            background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
+            color: #ffffff;
+            border: none;
+            padding: 14px 40px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            border-radius: 4px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 210, 255, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        #start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(0, 210, 255, 0.6);
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 0.85rem;
+            color: #5c7699;
+            letter-spacing: 0.05em;
+        }
+    </style>
+    <script type="importmap">
     {
-      "imports": {
-        "three": "./three.module.min.js"
-      }
+        "imports": {
+            "three": "./three.module.min.js"
+        }
     }
-  </script>
+    </script>
 </head>
 <body>
-  <div id="game"></div>
-  <div id="hud"></div>
-  <div id="hud-notify"></div>
-  <div id="hud-root"></div>
-  <div id="screen-root"></div>
-  <div id="start-btn"></div>
-  <div id="status"></div>
-  <div id="title-overlay"></div>
-  <script type="module" src="./main.js"></script>
+    <div id="game"></div>
+    <div id="hud-root">
+        <div id="hud"></div>
+        <div id="hud-notify"></div>
+    </div>
+    <div id="screen-root"></div>
+    <div id="title-overlay">
+        <h1>CALDERA BAY</h1>
+        <div class="subline">8 JOBS &middot; 5 DISTRICTS &middot; ONE CITY TO TAKE</div>
+        <button id="start-btn">PLAY</button>
+        <div id="status">INITIALIZING WORLD...</div>
+    </div>
+    <script type="module" src="./main.js"></script>
 </body>
 </html>
