@@ -32,7 +32,11 @@ const init = () => {
     save = loadSave();
     if (!save) save = canonicalSave();
 
-    buildCity(createRNG(), scene);
+    player = { x: 0, z: 0, inCar: null };
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const bootSeed = parseInt(urlParams.get('seed')) || 1;
+    buildCity(scene, bootSeed);
     initTraffic(scene);
     initPedestrians(scene);
     initPolice();
@@ -69,13 +73,14 @@ const renderLoop = (time) => {
 
 const updateSim = (dt) => {
     updateTraffic(dt);
-    updatePedestrians(dt);
-    updatePolice(dt);
+    const pPos = player ? {x: player.x, z: player.z} : {x: 0, z: 0};
+    updatePedestrians(dt, pPos);
+    updatePolice(dt, pPos);
     updateCombat(dt);
     updateSun(dt);
 };
 
-const updateHud = () => {
+const updateHud = (extra = {}) => {
     const units = getPoliceUnits(player ? {x: player.x, z: player.z} : {x: 0, z: 0});
     const snapshot = {
         player: player ? {
@@ -98,7 +103,8 @@ const updateHud = () => {
         objective: missions.currentObjective(),
         dialogue: null,
         eventLine: null,
-        radio: getCurrentStationInfo(save)
+        radio: getCurrentStationInfo(save),
+        ...extra
     };
     hud.update(snapshot);
 };
@@ -110,7 +116,7 @@ window.__photo = {
 
         // Reset world
         while(scene.children.length > 0) scene.remove(scene.children[0]);
-        buildCity(createRNG(), scene);
+        buildCity(scene, spec.seed || 1);
         initTraffic(scene);
         initPedestrians(scene);
         initPolice();
@@ -129,7 +135,7 @@ window.__photo = {
             // Spawn pack
             const heat = getHeat();
             for (let i = 0; i < [0,2,4,6,8,10][heat]; i++) {
-                spawnUnit(player.x, player.z);
+                spawnUnit({ x: player.x, z: player.z });
             }
             stageCover(camera, {x: player.x, z: player.z});
             hud.setPanels('cover');
@@ -153,12 +159,15 @@ window.__photo = {
             openStartScreen(save, {onContinue(){}, onNewGame(){}});
         }
 
-        hud.update({
+        updateHud({
             dialogue: spec.dialogue,
-            eventLine: spec.event,
-            police: { units: getPoliceUnits({x: player.x, z: player.z}) }
+            eventLine: spec.event
         });
         if (spec.dialogue) hud.showDialogue(spec.dialogue.name || spec.dialogue.speaker, spec.dialogue.text);
+
+        camera.updateMatrixWorld();
+        camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
     }
 };
 
@@ -174,8 +183,26 @@ window.__calderaTest = {
         peds: getPedestrians()
     }),
     hash: () => {},
-    stageCover: () => stageCover(camera, {x: player.x, z: player.z}),
-    coverAudit: () => coverAudit(camera),
+    stageCover: () => {
+        const units = getUnits();
+        units.forEach((u, idx) => {
+            const offset = new THREE.Vector3((idx % 3 - 1) * 2, 0, -4 - (idx * 1.5)).applyQuaternion(camera.quaternion);
+            u.x = camera.position.x + offset.x;
+            u.z = camera.position.z + offset.z;
+        });
+    },
+    coverAudit: () => {
+        camera.updateMatrixWorld();
+        camera.updateProjectionMatrix();
+        const units = getUnits();
+        return units.map(u => {
+            const v = new THREE.Vector3(u.x, groundHeight(u.x, u.z) + 1, u.z);
+            v.project(camera);
+            const sx = (v.x * 0.5 + 0.5) * 100;
+            const sy = (-(v.y * 0.5) + 0.5) * 100;
+            return { name: u.name, tactic: u.tactic, distance: 0, sx, sy };
+        });
+    },
     getPedsNearby: (r) => getPedestrians().filter(p => true),
     isPlayerOnFoot: () => !player?.inCar,
     dumpScene: () => console.log(scene),
