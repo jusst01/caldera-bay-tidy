@@ -57,7 +57,7 @@ export function openStartScreen(save, {onContinue, onNewGame}) {
     <div style="font-size:14px; color:#aaa; margin-bottom:10px;">8 JOBS · 5 DISTRICTS · ONE CITY TO TAKE</div>
     <div id="takeover-line" style="font-weight:bold; margin-bottom:5px;">CITY TAKEOVER ${tCount}/5</div>
     <div style="font-size:12px; margin-bottom:15px;">MUELLE ${save.takeover.muelle}% · PASEO ${save.takeover.paseo}% · VERDE ${save.takeover.verde}% · CENIZA ${save.takeover.ceniza}% · CUMBRE ${save.takeover.cumbre}%</div>
-    <button id="cont">CONTINUE — JOB ${save.missionIndex + 1}/8 · REP ${save.rep} · $${save.cash.toLocaleString()}</button>
+    <button id="cont">CONTINUE — JOB ${save.jobsDone + 1}/8 · REP ${save.rep} · $${save.cash.toLocaleString()}</button>
     <button id="new">NEW GAME</button>
     <div style="margin:10px 0; font-size:12px;">AUTOSAVE ON · SLOT 1 · ${save.lastSaveClock || '14:32'}</div>
     <h2>YOUR RISE</h2>
