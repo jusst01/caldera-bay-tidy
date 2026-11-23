@@ -18,4 +18,15 @@ CALDERA BAY is a high-octane action experience set in a dense, interactive world
 - **Combat**: Tactical engagement systems.
 
 ## Architecture
-Built on a modular, event-driven framework, CALDERA BAY focuses on high-performance state management and efficient asset streaming. The core engine drives real-time interactions, ensuring a smooth and responsive experience even during intense gameplay scenarios.
+Built on a modular, event-driven framework, CALDERA BAY focuses on high-performance state management and efficient asset streaming. The core engine drives real-time interactions, ensuring a smooth and responsive experience even during intense gameplay scenarios. The system is designed for extensibility, allowing for seamless integration of new content and mechanics, while maintaining a lean and efficient memory footprint.
+
+## Installation
+To run CALDERA BAY, ensure you have Node.js 22.18+ installed. Clone the repository and run the main entry point as follows:
+
+```bash
+npm install
+node main.ts
+```
+
+## Contributing
+We welcome contributions to CALDERA BAY! Please follow the contribution guidelines and ensure all tests pass before submitting a pull request.
