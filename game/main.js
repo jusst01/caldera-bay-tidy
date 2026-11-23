@@ -6,7 +6,7 @@ import { initPedestrians, updatePedestrians, witnessesAt, getPedestrians, damage
 import { initPolice, reportCrime, setPointsFloor, setPoints, getHeat, getPoints, getHeatPoints, getUnits, respray, forceRoadblock, updatePolice, spawnUnit, stageCover, coverAudit, getPoliceUnits } from './police.js';
 import { WEAPON_SPECS, initCombat, switchWeapon, nextWeapon, reloadWeapon, updateCombat, fireWeapon, damagePlayer, getAmmo, getCombatState, showWeaponWheel } from './combat.js';
 import { JOBS, createMissions } from './missions.js';
-import { REP_TIERS, tierFor, emptySave, canonicalSave, takeoverCount, loadSave, saveSave, clearSave } from './save.js';
+import { REP_TIERS, tierFor, tierNameFor, emptySave, canonicalSave, takeoverCount, loadSave, saveSave, clearSave } from './save.js';
 import { SHOP_POS, PRICES, TIME_TRIALS, createEconomy } from './economy.js';
 import { createHud } from './hud.js';
 import { closeCurrentScreen, openStartScreen, openGarageScreen, openMenu } from './screens.js';
@@ -32,7 +32,7 @@ const init = () => {
     save = loadSave();
     if (!save) save = canonicalSave();
 
-    player = { x: 0, z: 0, inCar: null };
+    player = { x: 0, z: 0, inCar: null, armour: save.armour, hp: save.hp };
 
     const urlParams = new URLSearchParams(window.location.search);
     const bootSeed = parseInt(urlParams.get('seed')) || 1;
@@ -84,8 +84,8 @@ const updateHud = (extra = {}) => {
     const units = getPoliceUnits(player ? {x: player.x, z: player.z} : {x: 0, z: 0});
     const snapshot = {
         player: player ? {
-            hp: 100, // Dummy for now
-            armour: 0, // Dummy
+            hp: player.hp ?? save.hp ?? 100,
+            armour: player.armour ?? save.armour ?? 0,
             ammo: getAmmo().current,
             inCar: !!player.inCar,
             x: player.x,
@@ -94,11 +94,11 @@ const updateHud = (extra = {}) => {
         } : {},
         heat: getHeat(),
         points: getPoints(),
-        police: { units: units.map(u => ({ name: u.name, tactic: u.tactic, dist: 0 })) },
+        police: { units: units.map(u => ({ name: u.name, tactic: u.tactic, dist: u.dist })) },
         cash: save.cash,
         rep: save.rep,
-        tier: save.tier,
-        takeoverCount: save.takeoverCount,
+        tier: tierNameFor(save.rep),
+        takeoverCount: takeoverCount(save.takeover),
         jobsDone: save.jobsDone,
         objective: missions.currentObjective(),
         dialogue: null,
@@ -128,7 +128,7 @@ window.__photo = {
         missions.forceStage(spec.job - 1, spec.jobStage ?? 0);
         setPoints(spec.heat);
 
-        player = { x: -300, z: 300, inCar: null };
+        player = { x: -300, z: 300, inCar: null, armour: save.armour, hp: save.hp };
 
         if (spec.mode === 'drive') {
             player.inCar = spawnVehicle('zorro', -300, 300, 0, scene);
@@ -139,8 +139,9 @@ window.__photo = {
             }
             stageCover(camera, {x: player.x, z: player.z});
             hud.setPanels('cover');
-            camera.position.set(-300, 3.5, 308);
-            camera.lookAt(-300, 1.0, 300);
+            const gh = groundHeight(player.x, player.z);
+            camera.position.set(player.x, gh + 3.5, player.z + 8);
+            camera.lookAt(player.x, gh + 1.0, player.z);
         } else {
             player.y = groundHeight(-300, 300);
             for (let i = 0; i < 5; i++) {

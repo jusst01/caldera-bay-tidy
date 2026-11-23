@@ -1,4 +1,5 @@
 import * as THREE from './three.module.min.js';
+import { groundHeight } from './city.js';
 
 let points = 0;
 let units = [];
@@ -43,15 +44,34 @@ export function spawnUnit(pos) {
 }
 
 export function stageCover(camera, playerPos) {
-  // Position units against camera
+  units.forEach((u, idx) => {
+    const offset = new THREE.Vector3((idx % 3 - 1) * 2, 0, -4 - (idx * 1.5)).applyQuaternion(camera.quaternion);
+    u.x = camera.position.x + offset.x;
+    u.z = camera.position.z + offset.z;
+  });
 }
 
 export function coverAudit(camera) {
-  return units.map(u => ({ name: u.name, tactic: u.tactic, distance: 0, sx: 0, sy: 0 }));
+  camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();
+  return units.map(u => {
+    const v = new THREE.Vector3(u.x, groundHeight(u.x, u.z) + 1, u.z);
+    v.project(camera);
+    const sx = (v.x * 0.5 + 0.5) * 100;
+    const sy = (-(v.y * 0.5) + 0.5) * 100;
+    const distance = Math.sqrt((u.x - camera.position.x)**2 + (u.z - camera.position.z)**2);
+    return { name: u.name, tactic: u.tactic, distance, sx, sy };
+  });
 }
 
 export function getPoliceUnits(playerPos) {
-  return units.map(u => ({ name: u.name, tactic: u.tactic, dist: 0 }));
+  const p = playerPos || { x: 0, z: 0 };
+  return units.map(u => {
+    const dx = u.x - p.x;
+    const dz = u.z - p.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    return { name: u.name, tactic: u.tactic, dist };
+  });
 }
 
 export function getUnits() { return units; }

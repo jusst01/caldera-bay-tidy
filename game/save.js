@@ -9,6 +9,8 @@ export const REP_TIERS = {
   LEYENDA: 1400
 };
 
+export const TIER_NAMES = ['Nobody', 'Runner', 'Wheelman', 'Fixer', 'Broker', 'Leyenda'];
+
 export const tierFor = (rep) => {
   if (rep >= REP_TIERS.LEYENDA) return 5;
   if (rep >= REP_TIERS.BROKER) return 4;
@@ -16,6 +18,10 @@ export const tierFor = (rep) => {
   if (rep >= REP_TIERS.WHEELMAN) return 2;
   if (rep >= REP_TIERS.RUNNER) return 1;
   return 0;
+};
+
+export const tierNameFor = (rep) => {
+  return TIER_NAMES[tierFor(rep)];
 };
 
 export const emptySave = () => ({
@@ -44,10 +50,10 @@ export const canonicalSave = () => ({
   armour: 60,
   hp: 100,
   ownedCars: [
-    { model: 'Zorro GT', condition: 86 },
-    { model: 'Corsario S', condition: 91 },
-    { model: 'Mula 4x4', condition: 74 },
-    { model: 'Sirena', condition: 100 }
+    { id: 'zorro', name: 'Zorro GT', condition: 86 },
+    { id: 'corsario', name: 'Corsario S', condition: 91 },
+    { id: 'mula', name: 'Mula', condition: 74 },
+    { id: 'sirena', name: 'Sirena', condition: 100 }
   ],
   stats: { carsStolen: 41, topSpeed: 247, maxHeat: 5, contractsDone: 9, trialsWon: 4, jobsFailed: 1 },
   playtimeSec: 8712,
