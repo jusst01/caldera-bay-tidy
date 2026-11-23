@@ -1,4 +1,6 @@
 import * as THREE from './three.module.min.js';
+import { createVehicleMesh } from './vehicles.js';
+import { groundHeight } from './city.js';
 
 let _seed = 42;
 function seededRandom() {
@@ -31,15 +33,27 @@ let searchTimer = 0;
 let isSearching = false;
 let isBusted = false;
 let roadblockActive = false;
+let scene = null;
 
-export function initPolice() {
+export function initPolice(sceneRef) {
+  scene = sceneRef;
   points = 0;
   pointsFloor = 0;
+  units.forEach(u => scene.remove(u.mesh));
   units = [];
   searchTimer = 0;
   isSearching = false;
   isBusted = false;
   roadblockActive = false;
+}
+
+function spawnUnitMesh(unit) {
+  const mesh = createVehicleMesh(unit.type === 'van' ? 'perro' : 'fenix');
+  unit.mesh = mesh;
+  const y = groundHeight(unit.x, unit.z);
+  mesh.position.set(unit.x, y, unit.z);
+  if (scene) scene.add(mesh);
+  return mesh;
 }
 
 export function reportCrime(crimeType) {
@@ -78,6 +92,7 @@ export function getHeatPoints() {
 export function respray() {
   points = 0;
   pointsFloor = 0;
+  units.forEach(u => scene.remove(u.mesh));
   units = [];
   isSearching = false;
   searchTimer = 0;
@@ -109,8 +124,10 @@ export function spawnUnit(type = 'cruiser') {
     z: rz,
     vx: 0,
     vz: 0,
-    speed: 0
+    speed: 0,
+    angle: 0
   };
+  spawnUnitMesh(unit);
   units.push(unit);
   return unit;
 }
@@ -130,7 +147,8 @@ export function updatePolice(dt, playerPos) {
     spawnUnit(isVan ? 'van' : 'cruiser');
   }
   while (units.length > targetCount) {
-    units.pop();
+    const u = units.pop();
+    if (u.mesh) scene.remove(u.mesh);
   }
 
   units.forEach((u, idx) => {
@@ -147,8 +165,12 @@ export function updatePolice(dt, playerPos) {
         const speed = 12 + heat * 2;
         u.x += (dx / dist) * speed * dt;
         u.z += (dz / dist) * speed * dt;
+        u.angle = Math.atan2(dx, dz);
       }
     }
+    const y = groundHeight(u.x, u.z);
+    u.mesh.position.set(u.x, y, u.z);
+    u.mesh.rotation.y = u.angle;
   });
 
   if (heat === 0 && points > 0) {
@@ -184,11 +206,16 @@ export function stageCover(camera, playerPos) {
       const offsetLat = (i === 0 ? -8.5 : 8.5);
       u.x = playerPos.x + offsetLat;
       u.z = playerPos.z - 4;
+      u.angle = 0;
     } else {
       const queueDist = 16 + (i * 10);
       u.x = playerPos.x + (i % 2 === 0 ? -12 : 12);
       u.z = playerPos.z - queueDist;
+      u.angle = 0;
     }
+    const y = groundHeight(u.x, u.z);
+    u.mesh.position.set(u.x, y, u.z);
+    u.mesh.rotation.y = u.angle;
   });
 }
 
@@ -197,7 +224,7 @@ export function coverAudit(camera) {
   const tempV = new THREE.Vector3();
 
   units.forEach(u => {
-    tempV.set(u.x, u.y, u.z);
+    tempV.set(u.x, u.mesh.position.y, u.z);
     tempV.project(camera);
 
     const sx = (tempV.x * 0.5 + 0.5) * 100;

@@ -22,11 +22,13 @@ function getGroundHeight(x, z) {
 export function createVehicleMesh(id) {
   const group = new THREE.Group();
   const spec = VEHICLE_ROSTER.find(v => v.id === id);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 4), new THREE.MeshPhongMaterial({ color: spec.colour }));
-  body.position.y = 0.5;
+  const isPolice = spec.class === 'police' || spec.class === 'SWAT';
+  const bodyColor = isPolice ? '#ffffff' : spec.colour;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.1, 4.2), new THREE.MeshPhongMaterial({ color: bodyColor }));
+  body.position.y = 0.55;
   group.add(body);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 2), new THREE.MeshPhongMaterial({ color: '#222222' }));
-  cabin.position.set(0, 1.2, 0);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 2.0), new THREE.MeshPhongMaterial({ color: isPolice ? '#000000' : '#222222' }));
+  cabin.position.set(0, 1.4, 0);
   group.add(cabin);
   for (let i = 0; i < 4; i++) {
     const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.4, 8), new THREE.MeshPhongMaterial({ color: '#111111' }));
@@ -34,13 +36,10 @@ export function createVehicleMesh(id) {
     wheel.position.set(i % 2 === 0 ? -1 : 1, 0.3, i < 2 ? -1.5 : 1.5);
     group.add(wheel);
   }
-  if (spec.class === 'police' || spec.class === 'SWAT') {
+  if (isPolice) {
     const lightBar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.5), new THREE.MeshBasicMaterial({ color: '#ff0000' }));
-    lightBar.position.set(0, 1.6, 0);
+    lightBar.position.set(0, 1.9, 0);
     group.add(lightBar);
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.1, 4.1), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-    stripe.position.y = 0.5;
-    group.add(stripe);
   } else if (spec.class === 'heli') {
     const rotor = new THREE.Mesh(new THREE.BoxGeometry(4, 0.1, 0.2), new THREE.MeshPhongMaterial({ color: '#555555' }));
     rotor.position.y = 2;
@@ -56,9 +55,12 @@ export function createVehicleMesh(id) {
 export function spawnVehicle(id, x, z, heading, scene) {
   const spec = VEHICLE_ROSTER.find(v => v.id === id);
   const mesh = createVehicleMesh(id);
+  const y = getGroundHeight(x, z);
+  mesh.position.set(x, y, z);
+  mesh.rotation.y = heading;
   scene.add(mesh);
   return {
-    id, x, z, y: getGroundHeight(x, z), angle: heading, speed: 0,
+    id, x, z, y, angle: heading, speed: 0,
     name: spec.name, durability: 100, mesh: mesh, dead: false,
     engineForce: 0, brake: 0, grip: spec.grip, mass: spec.id === 'mula' ? 1600 : 1200,
     velocity: new THREE.Vector3(0,0,0)

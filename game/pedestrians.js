@@ -162,6 +162,8 @@ export function debugSetPed(index, x, z, angle) {
     if (index >= 0 && index < peds.length) {
         const p = peds[index];
         p.mesh.position.set(x, 0, z);
+        p.x = x;
+        p.z = z;
         p.targetAngle = angle;
         p.mesh.rotation.y = -angle + Math.PI / 2;
         p.state = 'walk';
