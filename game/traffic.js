@@ -1,73 +1,69 @@
 import * as THREE from './three.module.min.js';
-import { spawnVehicle, updateVehicle } from './vehicles.js';
+import { VEHICLE_ROSTER, spawnVehicle, updateVehicle } from './vehicles.js';
 
-let trafficCars = [];
-let seed = 987654321;
-
-function seededRandom() {
-  seed = (seed * 16807) % 2147483647;
-  return (seed - 1) / 2147483646;
-}
-
-const LANES = [
-  { x: 3.4, dir: 0 },
-  { x: -3.4, dir: Math.PI }
+const laneNodes = [
+    {x: -500, z: -500}, {x: 500, z: -500},
+    {x: -500, z: 500}, {x: 500, z: 500}
 ];
 
-export function initTraffic() {
-  trafficCars = [];
-}
+let trafficCars = [];
 
-export function spawnTraffic(scene) {
-  for (let i = 0; i < 24; i++) {
-    const lane = LANES[i % LANES.length];
-    const z = (seededRandom() - 0.5) * 2000;
-    const x = lane.x;
-    const heading = lane.dir;
-
-    const car = spawnVehicle('colibri', x, z, heading, scene);
-    car.speed = 10 + seededRandom() * 15;
-    trafficCars.push(car);
-  }
-}
-
-export function updateTraffic(dt, scene) {
-  for (let i = 0; i < trafficCars.length; i++) {
-    const car = trafficCars[i];
-
-    // Lane logic: Stay on track
-    const targetHeading = (car.x > 0 ? 0 : Math.PI);
-    car.angle += (targetHeading - car.angle) * 0.05;
-
-    // Slow for car ahead
-    let speedMult = 1.0;
-    for (let j = 0; j < trafficCars.length; j++) {
-      if (i === j) continue;
-      const other = trafficCars[j];
-      const distZ = other.z - car.z;
-      const distX = Math.abs(car.x - other.x);
-
-      if (distZ > 0 && distZ < 20 && distX < 5) {
-        speedMult = 0.2;
-        break;
-      }
+export const initTraffic = (scene) => {
+    trafficCars = [];
+    for (let i = 0; i < 24; i++) {
+        spawnTraffic(scene);
     }
+};
 
-    // Update car
-    updateVehicle(car, dt, { throttle: speedMult });
-  }
-}
+export const spawnTraffic = (scene) => {
+    const id = VEHICLE_ROSTER[Math.floor(Math.random() * 9)].id;
+    const startNode = laneNodes[Math.floor(Math.random() * laneNodes.length)];
+    const vehicle = spawnVehicle(id, startNode.x, startNode.z, Math.random() * Math.PI * 2, scene);
+    vehicle.targetNode = laneNodes[Math.floor(Math.random() * laneNodes.length)];
+    trafficCars.push(vehicle);
+};
 
-export function getTrafficCars() {
-  return trafficCars;
-}
+export const updateTraffic = (dt) => {
+    for (let i = 0; i < trafficCars.length; i++) {
+        const vehicle = trafficCars[i];
 
-export function markStolen(car) {
-  const index = trafficCars.indexOf(car);
-  if (index !== -1) {
-    if (car.mesh && car.mesh.parent) {
-      car.mesh.parent.remove(car.mesh);
+        // Simple steering towards target
+        const dx = vehicle.targetNode.x - vehicle.x;
+        const dz = vehicle.targetNode.z - vehicle.z;
+        const targetHeading = Math.atan2(dx, dz);
+
+        let steer = 0;
+        if (vehicle.heading < targetHeading) steer = 1;
+        if (vehicle.heading > targetHeading) steer = -1;
+
+        const controls = {
+            throttle: 0.5,
+            brake: 0,
+            steer: steer
+        };
+
+        // Slow for car ahead (basic collision avoidance)
+        for (let j = 0; j < trafficCars.length; j++) {
+            if (i === j) continue;
+            const other = trafficCars[j];
+            const dist = Math.sqrt((vehicle.x - other.x)**2 + (vehicle.z - other.z)**2);
+            if (dist < 10) {
+                controls.throttle = 0;
+                controls.brake = 1;
+            }
+        }
+
+        updateVehicle(vehicle, dt, controls);
+
+        // Reached target
+        if (Math.abs(vehicle.x - vehicle.targetNode.x) < 5 && Math.abs(vehicle.z - vehicle.targetNode.z) < 5) {
+            vehicle.targetNode = laneNodes[Math.floor(Math.random() * laneNodes.length)];
+        }
     }
-    trafficCars.splice(index, 1);
-  }
-}
+};
+
+export const getTrafficCars = () => trafficCars;
+
+export const markStolen = (vehicle) => {
+    trafficCars = trafficCars.filter(v => v !== vehicle);
+};
