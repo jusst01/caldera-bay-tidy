@@ -1,39 +1,42 @@
-// CALDERA BAY
-// A make.fun gta6-01 entry.
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const outDir = process.env.MAKEFUN_OUTPUT_DIR || '/output';
+// Resolve module directory and target output path
+const currentModulePath = fileURLToPath(import.meta.url);
+const baseDir = dirname(currentModulePath);
+const targetOutputDir = process.env.MAKEFUN_OUTPUT_DIR || '/output';
 
-function setupOutput() {
-  if (!fs.existsSync(outDir)) {
-    fs.mkdirSync(outDir, { recursive: true });
-  }
-  const gameOut = path.join(outDir, 'game');
-  if (!fs.existsSync(gameOut)) {
-    fs.mkdirSync(gameOut, { recursive: true });
-  }
-  // Copy game/
-  fs.cpSync(path.join(__dirname, 'game'), gameOut, { recursive: true });
+// Ensure the root output directory exists
+mkdirSync(targetOutputDir, { recursive: true });
 
-  // Copy screenshots/
-  const ssIn = path.join(__dirname, 'screenshots');
-  if (fs.existsSync(ssIn)) {
-    const ssOut = path.join(outDir, 'screenshots');
-    if (!fs.existsSync(ssOut)) fs.mkdirSync(ssOut, { recursive: true });
-    fs.cpSync(ssIn, ssOut, { recursive: true });
+// Helper to copy directory if source exists
+function copyDirectoryAssets(srcSubpath: string, destSubpath: string) {
+  const sourcePath = join(baseDir, srcSubpath);
+  const destinationPath = join(targetOutputDir, destSubpath);
+  if (existsSync(sourcePath)) {
+    mkdirSync(destinationPath, { recursive: true });
+    cpSync(sourcePath, destinationPath, { recursive: true });
   }
-
-  buildDossier(outDir, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000
-  });
 }
 
-setupOutput();
+// Copy game files and screenshots
+copyDirectoryAssets('game', 'game');
+copyDirectoryAssets('screenshots', 'screenshots');
+
+// Construct capabilities object for dossier generation
+const createCaps = () => ({
+  text_max_bytes: 163840,
+  screenshots: {
+    max: 4,
+    max_bytes: 262144,
+  },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+  game_path_max_bytes: 1000,
+});
+
+// Generate and write dossier.json
+const dossierBytes = buildDossier(targetOutputDir, createCaps());
+writeFileSync(join(targetOutputDir, 'dossier.json'), dossierBytes);
