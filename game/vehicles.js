@@ -1,117 +1,95 @@
 import * as THREE from './three.module.min.js';
 
+function groundHeight(x, z) { return 0; }
+
 export const VEHICLE_ROSTER = [
-  {id: 'colibri', name: 'Colibrí', topSpeed: 130, grip: 0.72, class: 'compact', chop: 50, colour: '#ff0000'},
-  {id: 'sirena', name: 'Sirena', topSpeed: 150, grip: 0.75, class: 'taxi', chop: 80, colour: '#ffff00'},
-  {id: 'caiman', name: 'Caimán', topSpeed: 120, grip: 0.65, class: 'van', chop: 100, colour: '#808080'},
-  {id: 'mula', name: 'Mula', topSpeed: 140, grip: 0.80, class: 'pickup', chop: 120, colour: '#00ff00'},
-  {id: 'boxer', name: 'Bóxer', topSpeed: 95, grip: 0.55, class: 'truck', chop: 90, colour: '#0000ff'},
-  {id: 'fantasma', name: 'Fantasma', topSpeed: 180, grip: 0.78, class: 'luxury', chop: 300, colour: '#ffffff'},
-  {id: 'corsario', name: 'Corsario S', topSpeed: 190, grip: 0.70, class: 'muscle', chop: 220, colour: '#ff00ff'},
-  {id: 'zorro', name: 'Zorro GT', topSpeed: 220, grip: 0.85, class: 'sports', chop: 320, colour: '#ff8800'},
-  {id: 'relampago', name: 'Relámpago', topSpeed: 260, grip: 0.90, class: 'super', chop: 400, colour: '#00ffff'},
-  {id: 'fenix', name: 'Fénix', topSpeed: 200, grip: 0.82, class: 'police', chop: 0, colour: '#000000'},
-  {id: 'perro', name: 'Perro', topSpeed: 150, grip: 0.75, class: 'SWAT', chop: 0, colour: '#000088'},
-  {id: 'halcon', name: 'Halcón', topSpeed: 200, grip: 0.95, class: 'heli', chop: 0, colour: '#555555'}
+    { id: 'colibri', name: 'Colibrí', topSpeed: 130, grip: 0.72, class: 'compact', chop: 50, colour: 0xFF0000 },
+    { id: 'sirena', name: 'Sirena', topSpeed: 150, grip: 0.75, class: 'taxi', chop: 80, colour: 0xFFFF00 },
+    { id: 'caiman', name: 'Caimán', topSpeed: 120, grip: 0.65, class: 'van', chop: 100, colour: 0x888888 },
+    { id: 'mula', name: 'Mula', topSpeed: 140, grip: 0.80, class: 'pickup', chop: 120, colour: 0x444400 },
+    { id: 'boxer', name: 'Bóxer', topSpeed: 95, grip: 0.55, class: 'truck', chop: 90, colour: 0x333333 },
+    { id: 'fantasma', name: 'Fantasma', topSpeed: 180, grip: 0.78, class: 'luxury', chop: 300, colour: 0x0000FF },
+    { id: 'corsario', name: 'Corsario S', topSpeed: 190, grip: 0.70, class: 'muscle', chop: 220, colour: 0xFF00FF },
+    { id: 'zorro', name: 'Zorro GT', topSpeed: 220, grip: 0.85, class: 'sports', chop: 320, colour: 0x00FFFF },
+    { id: 'relampago', name: 'Relámpago', topSpeed: 260, grip: 0.90, class: 'super', chop: 400, colour: 0xFFFFFF },
+    { id: 'fenix', name: 'Fénix', topSpeed: 200, grip: 0.82, class: 'police', chop: 0, colour: 0xFFFFFF },
+    { id: 'perro', name: 'Perro', topSpeed: 150, grip: 0.75, class: 'swat', chop: 0, colour: 0x000000 },
+    { id: 'halcon', name: 'Halcón', topSpeed: 0, grip: 0.00, class: 'heli', chop: 0, colour: 0x000000 }
 ];
 
-function getGroundHeight(x, z) {
-  return 0;
-}
-
 export function createVehicleMesh(id) {
-  const group = new THREE.Group();
-  const spec = VEHICLE_ROSTER.find(v => v.id === id);
-  const isPolice = spec.class === 'police' || spec.class === 'SWAT';
-  const bodyColor = isPolice ? '#ffffff' : spec.colour;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.1, 4.2), new THREE.MeshPhongMaterial({ color: bodyColor }));
-  body.position.y = 0.55;
-  group.add(body);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.8, 2.0), new THREE.MeshPhongMaterial({ color: isPolice ? '#000000' : '#222222' }));
-  cabin.position.set(0, 1.4, 0);
-  group.add(cabin);
-  for (let i = 0; i < 4; i++) {
-    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.4, 8), new THREE.MeshPhongMaterial({ color: '#111111' }));
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(i % 2 === 0 ? -1 : 1, 0.3, i < 2 ? -1.5 : 1.5);
-    group.add(wheel);
-  }
-  if (isPolice) {
-    const lightBar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.5), new THREE.MeshBasicMaterial({ color: '#ff0000' }));
-    lightBar.position.set(0, 1.9, 0);
-    group.add(lightBar);
-  } else if (spec.class === 'heli') {
-    const rotor = new THREE.Mesh(new THREE.BoxGeometry(4, 0.1, 0.2), new THREE.MeshPhongMaterial({ color: '#555555' }));
-    rotor.position.y = 2;
-    group.add(rotor);
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2, 16), new THREE.MeshBasicMaterial({ color: '#ffffaa', transparent: true, opacity: 0.5 }));
-    cone.position.set(0, -1, 0);
-    cone.rotation.x = Math.PI;
-    group.add(cone);
-  }
-  return group;
+    const group = new THREE.Group();
+    const data = VEHICLE_ROSTER.find(v => v.id === id);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 4), new THREE.MeshLambertMaterial({ color: data.colour }));
+    body.position.y = 0.4;
+    group.add(body);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 2), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+    cabin.position.y = 1.1;
+    cabin.position.z = -0.5;
+    group.add(cabin);
+
+    for (let i = 0; i < 4; i++) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.4, 8), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(i % 2 === 0 ? -1.1 : 1.1, 0.2, i < 2 ? -1.5 : 1.5);
+        group.add(wheel);
+    }
+    if (id === 'fenix' || id === 'perro') {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.1, 4.1), new THREE.MeshLambertMaterial({ color: 0xFFFFFF }));
+        stripe.position.y = 0.45;
+        group.add(stripe);
+        const lightBar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 0.4), new THREE.MeshLambertMaterial({ color: 0xFF0000 }));
+        lightBar.position.y = 1.5;
+        group.add(lightBar);
+    }
+    if (id === 'halcon') {
+        const rotor = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 0.2), new THREE.MeshLambertMaterial({ color: 0x333333 }));
+        rotor.position.y = 2;
+        group.add(rotor);
+        const spotlight = new THREE.SpotLight(0xFFFFFF, 2);
+        spotlight.position.set(0, 1.5, 0);
+        spotlight.target.position.set(0, 0, 5);
+        group.add(spotlight);
+        group.add(spotlight.target);
+    }
+    return group;
 }
 
 export function spawnVehicle(id, x, z, heading, scene) {
-  const spec = VEHICLE_ROSTER.find(v => v.id === id);
-  const mesh = createVehicleMesh(id);
-  const y = getGroundHeight(x, z);
-  mesh.position.set(x, y, z);
-  mesh.rotation.y = heading;
-  scene.add(mesh);
-  return {
-    id, x, z, y, angle: heading, speed: 0,
-    name: spec.name, durability: 100, mesh: mesh, dead: false,
-    engineForce: 0, brake: 0, grip: spec.grip, mass: spec.id === 'mula' ? 1600 : 1200,
-    velocity: new THREE.Vector3(0,0,0)
-  };
+    const data = VEHICLE_ROSTER.find(v => v.id === id);
+    const mesh = createVehicleMesh(id);
+    mesh.position.set(x, groundHeight(x, z), z);
+    mesh.rotation.y = heading;
+    scene.add(mesh);
+    return { id, x, z, angle: heading, speed: 0, mesh, durability: 100, stolen: false, mass: 1500, engineForce: 1000 };
 }
 
-export function updateVehicle(v, dt, controls = null, obstacles = []) {
-  if (v.dead) return;
+export function updateVehicle(vehicle, dt) {
+    if (vehicle.durability <= 0) return;
+    const drag = 0.1;
+    const friction = 0.5;
+    const engineForce = vehicle.engineForce;
+    const accel = (engineForce - (drag * vehicle.speed * vehicle.speed) - (friction * vehicle.speed)) / vehicle.mass;
+    vehicle.speed += accel * dt;
+    if (vehicle.speed < 0) vehicle.speed = 0;
+    if (vehicle.speed > 50) vehicle.speed = 50;
 
-  if (controls) {
-    v.engineForce = controls.throttle * 2000;
-    v.brake = controls.handbrake ? 2 : (controls.throttle === 0 ? 0.5 : 0);
-  }
+    vehicle.x += Math.sin(vehicle.angle) * vehicle.speed * dt;
+    vehicle.z += Math.cos(vehicle.angle) * vehicle.speed * dt;
 
-  const forward = new THREE.Vector3(Math.sin(v.angle), 0, Math.cos(v.angle));
-  const drag = v.speed * 0.1;
-  const totalForce = (v.engineForce - (v.brake * v.speed * 5) - drag);
-  v.speed += (totalForce / v.mass) * dt;
-  const lateralVelocity = v.velocity.clone().projectOnPlane(forward);
-  v.velocity.add(forward.multiplyScalar(v.speed * dt));
-  v.velocity.sub(lateralVelocity.multiplyScalar(v.grip * dt));
+    vehicle.mesh.position.set(vehicle.x, groundHeight(vehicle.x, vehicle.z), vehicle.z);
+    vehicle.mesh.rotation.y = vehicle.angle;
+}
 
-  if (controls) {
-    v.angle -= controls.steer * 0.05 * (v.speed / 100);
-  }
-
-  v.x += v.velocity.x;
-  v.z += v.velocity.z;
-
-  // Collision detection
-  for (const obs of obstacles) {
-    const dx = v.x - obs.x;
-    const dz = v.z - obs.z;
-    if (dx * dx + dz * dz < (1.5 + obs.radius) ** 2) {
-      v.speed *= -0.5;
-      v.velocity.multiplyScalar(-0.5);
+export function damageVehicle(vehicle, amount) {
+    vehicle.durability -= amount;
+    if (vehicle.durability < 0) vehicle.durability = 0;
+    if (vehicle.durability === 0) {
+        vehicle.speed = 0;
+        // add smoke
     }
-  }
-
-  v.y = getGroundHeight(v.x, v.z);
-  v.mesh.position.set(v.x, v.y, v.z);
-  v.mesh.rotation.y = v.angle;
-  if (v.durability <= 0) v.dead = true;
 }
 
-export function damageVehicle(v, other, impactSpeed) {
-  const damage = impactSpeed * (other.mass / v.mass);
-  v.durability -= damage;
-  if (v.durability < 0) v.durability = 0;
-}
-
-export function markStolen(v) {
-  v.stolen = true;
+export function markStolen(vehicle) {
+    vehicle.stolen = true;
 }

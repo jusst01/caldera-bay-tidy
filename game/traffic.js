@@ -1,68 +1,86 @@
 import * as THREE from './three.module.min.js';
-import { spawnVehicle, updateVehicle } from './vehicles.js';
 
-let trafficCars = [];
-let rng = Math.random;
+let seed = 42;
+function seededRandom() {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+}
 
-const laneGraph = [
-  {id: 0, x: 0, z: 0, next: [1, 2]},
-  {id: 1, x: 100, z: 0, next: [0, 3]},
-  {id: 2, x: 0, z: 100, next: [0, 4]},
-  {id: 3, x: 100, z: 100, next: [1, 2]},
-  {id: 4, x: 200, z: 200, next: [3]}
+const LANES = [
+    { id: 1, start: { x: -1000, z: -3.4 }, end: { x: 1000, z: -3.4 }, direction: 0 },
+    { id: 2, start: { x: 1000, z: 3.4 }, end: { x: -1000, z: 3.4 }, direction: Math.PI },
+    { id: 3, start: { x: -3.4, z: 1000 }, end: { x: -3.4, z: -1000 }, direction: Math.PI / 2 },
+    { id: 4, start: { x: 3.4, z: -1000 }, end: { x: 3.4, z: 1000 }, direction: -Math.PI / 2 },
+    { id: 5, start: { x: -1000, z: -100 }, end: { x: 1000, z: -100 }, direction: 0 },
+    { id: 6, start: { x: 1000, z: 100 }, end: { x: -1000, z: 100 }, direction: Math.PI }
 ];
 
-export function initTraffic(scene, _rng) {
-  trafficCars = [];
-  rng = _rng || Math.random;
-  for (let i = 0; i < 24; i++) {
-    const node = laneGraph[Math.floor(rng() * laneGraph.length)];
-    const car = spawnVehicle('colibri', node.x + 3.4, node.z, rng() * Math.PI * 2, scene);
-    car.node = node;
-    car.lastNode = null;
-    trafficCars.push(car);
-  }
+let trafficCars = [];
+
+function createCar(lane) {
+    return {
+        id: 'civ_' + Math.floor(seededRandom() * 1000000),
+        x: lane.start.x + (lane.end.x - lane.start.x) * seededRandom(),
+        z: lane.start.z + (lane.end.z - lane.start.z) * seededRandom(),
+        angle: lane.direction,
+        speed: 15 + seededRandom() * 15,
+        lane: lane,
+        stolen: false,
+        lastUpdate: 0
+    };
+}
+
+export function initTraffic() {
+    trafficCars = [];
+    for (let i = 0; i < 24; i++) {
+        spawnTraffic();
+    }
 }
 
 export function spawnTraffic() {
-  return trafficCars;
+    const lane = LANES[Math.floor(seededRandom() * LANES.length)];
+    trafficCars.push(createCar(lane));
 }
 
 export function updateTraffic(dt) {
-  trafficCars.forEach(car => {
-    car.engineForce = 1500;
+    for (let i = 0; i < trafficCars.length; i++) {
+        const car = trafficCars[i];
+        if (car.stolen) continue;
 
-    let slowDown = false;
-    trafficCars.forEach(other => {
-      if (car === other) return;
-      const dist = Math.sqrt((car.x - other.x)**2 + (car.z - other.z)**2);
-      if (dist < 20) slowDown = true;
-    });
+        let canMove = true;
+        for (let j = 0; j < trafficCars.length; j++) {
+            if (i === j) continue;
+            const other = trafficCars[j];
+            if (other.stolen) continue;
 
-    if (slowDown) {
-      car.engineForce = 0;
-      car.brake = 1;
-    } else {
-      car.brake = 0;
+            const dx = car.x - other.x;
+            const dz = car.z - other.z;
+            const distSq = dx * dx + dz * dz;
+            if (distSq < 225) { // 15 squared
+                canMove = false;
+                break;
+            }
+        }
+        if (canMove) {
+            car.x += Math.sin(car.angle) * car.speed * dt;
+            car.z += Math.cos(car.angle) * car.speed * dt;
+        }
+
+        if (Math.abs(car.x) > 1200 || Math.abs(car.z) > 1200) {
+            car.x = car.lane.start.x;
+            car.z = car.lane.start.z;
+        }
     }
-
-    updateVehicle(car, dt);
-
-    if (Math.abs(car.x - (car.node.x + 3.4)) < 5 && Math.abs(car.z - car.node.z) < 5) {
-      let nextOptions = car.node.next.filter(id => id !== (car.lastNode ? car.lastNode.id : -1));
-      if (nextOptions.length === 0) nextOptions = car.node.next;
-      const nextId = nextOptions[Math.floor(rng() * nextOptions.length)];
-      car.lastNode = car.node;
-      car.node = laneGraph.find(n => n.id === nextId);
-      car.angle = Math.atan2((car.node.x + 3.4) - car.x, car.node.z - car.z);
-    }
-  });
 }
 
 export function getTrafficCars() {
-  return trafficCars;
+    return trafficCars;
 }
 
-export function markStolen(car) {
-  trafficCars = trafficCars.filter(c => c !== car);
+export function markStolen(id) {
+    const index = trafficCars.findIndex(c => c.id === id);
+    if (index !== -1) {
+        trafficCars[index].stolen = true;
+        trafficCars.splice(index, 1);
+    }
 }
