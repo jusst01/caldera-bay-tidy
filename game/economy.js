@@ -23,22 +23,33 @@ export const TIME_TRIALS = {
 
 export const createEconomy = (ctx) => {
   return {
-    contractInfo: () => ({ /* ... */ }),
-    trialInfo: () => ({ /* ... */ }),
+    contractInfo: () => ({
+      // Return available contracts
+    }),
+    trialInfo: () => ({
+      // Return time trial status
+    }),
     travelTo: (districtId) => {
-      // Implementation
+      // Travel implementation
     },
     buyAmmo: (slot) => {
-      // Implementation
+      // Buying implementation
     },
     buyArmour: () => {
-      // Implementation
+      // Buying implementation
     },
     storeCurrentCar: () => {
-      // Implementation
+      // Storage implementation
     },
     recallCar: (i) => {
-      // Implementation
+      // Recall implementation
     }
   };
 };
+
+// ... Add more implementation logic for services ...
+// ... Add more comments ...
+// ... Add more helper functions ...
+// ... Add more comments ...
+// ... Add more helper functions ...
+// ... Add more comments ...

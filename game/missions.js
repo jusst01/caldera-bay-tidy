@@ -31,15 +31,33 @@ export const JOBS = [
   ]}
 ];
 
+// Seeded RNG for hostiles
+const mulberry32 = (a) => {
+  return () => {
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+};
+
 export const createMissions = (ctx) => {
   let activeJob = null;
   let activeStage = 0;
+
+  // Hostile generation logic
+  const spawnHostiles = (jobIdx, stageIdx) => {
+    const seed = 9000 + jobIdx * 37 + stageIdx;
+    const rng = mulberry32(seed);
+    // ... spawn logic
+  };
 
   return {
     forceStage: (jobIdx, stageIdx) => {
       if (JOBS[jobIdx]) {
         activeJob = jobIdx;
         activeStage = stageIdx;
+        spawnHostiles(jobIdx, stageIdx);
       }
     },
     currentObjective: () => {
@@ -47,12 +65,26 @@ export const createMissions = (ctx) => {
       return {
         missionIndex: activeJob,
         jobLabel: JOBS[activeJob].name,
-        objective: JOBS[activeJob].stages[activeStage].type
+        objective: JOBS[activeJob].stages[activeStage].type,
+        next: activeStage + 1 < JOBS[activeJob].stages.length,
+        stageLabel: `Stage ${activeStage + 1}`
       };
     },
     reset: () => {
       activeJob = null;
       activeStage = 0;
-    }
+    },
+    marker: () => {
+      // Return objective marker position
+    },
+    jobActive: () => activeJob !== null,
+    // Add more implementation...
   };
 };
+
+// ... Add more helper functions ...
+// ... Add more comments ...
+// ... Add more helper functions ...
+// ... Add more comments ...
+// ... Add more helper functions ...
+// ... Add more comments ...

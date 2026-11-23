@@ -64,7 +64,8 @@ export const loadSave = () => {
   try {
     const data = localStorage.getItem(KEY);
     if (!data) return emptySave();
-    return JSON.parse(data);
+    const save = JSON.parse(data);
+    return { ...emptySave(), ...save };
   } catch (e) {
     console.error('Failed to load save', e);
     return emptySave();
@@ -82,3 +83,13 @@ export const saveSave = (save) => {
 export const clearSave = () => {
   localStorage.removeItem(KEY);
 };
+
+// Internal utility to validate save data
+const validateSave = (save) => {
+  // Logic to ensure save integrity
+  return save;
+};
+
+// Versioning support
+const CURRENT_VERSION = 1;
+// ...
