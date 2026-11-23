@@ -52,6 +52,14 @@ export const createVehicleMesh = (id, scene) => {
         group.add(light);
     }
 
+    const grill = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.2, 0.1), new THREE.MeshStandardMaterial({ color: 0xaaaaaa }));
+    grill.position.set(0, 0, 2.0);
+    group.add(grill);
+
+    const bumper = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+    bumper.position.set(0, -0.2, 2.0);
+    group.add(bumper);
+
     scene.add(group);
     return group;
 };
@@ -67,7 +75,8 @@ export const spawnVehicle = (id, x, z, heading, scene) => {
         mesh,
         durability: 100,
         stolen: false,
-        smoke: null
+        smoke: null,
+        suspension: 0.5
     };
     mesh.position.set(x, groundHeight(x, z), z);
     mesh.rotation.y = heading;
@@ -79,29 +88,32 @@ const updatePhysics = (vehicle, dt, controls) => {
     const brake = controls ? controls.brake : 0;
     const steer = controls ? controls.steer : 0;
 
-    // Engine force
     const force = accel * vehicle.acc;
     vehicle.speed += force * dt;
 
-    // Drag
     vehicle.speed *= (1 - 0.1 * dt);
 
-    // Handbrake + Scrub
+    const lateralSpeed = Math.abs(Math.sin(vehicle.heading) * vehicle.speed);
+    const gripAdjustment = (1 - Math.min(1, lateralSpeed / (vehicle.grip * 10)));
+
     if (brake) {
         vehicle.speed *= (1 - 0.5 * dt);
-        vehicle.heading += steer * (vehicle.grip * 0.35) * dt;
+        vehicle.heading += steer * (vehicle.grip * 0.35) * dt * gripAdjustment;
     } else {
-        vehicle.heading += steer * vehicle.grip * (vehicle.speed / vehicle.topSpeed) * dt;
+        vehicle.heading += steer * vehicle.grip * (vehicle.speed / (vehicle.topSpeed + 0.1)) * dt * gripAdjustment;
     }
 
     vehicle.x += Math.sin(vehicle.heading) * vehicle.speed * dt;
     vehicle.z += Math.cos(vehicle.heading) * vehicle.speed * dt;
+
+    if (vehicle.speed > 50) {
+        vehicle.heading += (steer * 0.1) * dt;
+    }
 };
 
 export const updateVehicle = (vehicle, dt, controls) => {
     if (vehicle.durability <= 0) {
         if (!vehicle.smoke) {
-            // Add smoke particle system
             vehicle.smoke = new THREE.Group();
             vehicle.mesh.add(vehicle.smoke);
         }
@@ -112,10 +124,11 @@ export const updateVehicle = (vehicle, dt, controls) => {
 
     vehicle.mesh.position.set(vehicle.x, groundHeight(vehicle.x, vehicle.z), vehicle.z);
     vehicle.mesh.rotation.y = vehicle.heading;
+    updateMeshComponents(vehicle);
 };
 
 export const damageVehicle = (vehicle, relativeSpeed, otherMass) => {
-    const impact = relativeSpeed * (otherMass / vehicle.mass);
+    const impact = Math.abs(relativeSpeed) * (otherMass / vehicle.mass);
     vehicle.durability -= impact;
     if (vehicle.durability < 0) vehicle.durability = 0;
 };
@@ -123,3 +136,36 @@ export const damageVehicle = (vehicle, relativeSpeed, otherMass) => {
 export const markStolen = (vehicle) => {
     vehicle.stolen = true;
 };
+
+export const getVehicleStatus = (vehicle) => {
+    return {
+        x: vehicle.x,
+        z: vehicle.z,
+        speed: vehicle.speed,
+        durability: vehicle.durability,
+        stolen: vehicle.stolen
+    };
+};
+
+export const resetVehicle = (vehicle, x, z, heading) => {
+    vehicle.x = x;
+    vehicle.z = z;
+    vehicle.heading = heading;
+    vehicle.speed = 0;
+    vehicle.durability = 100;
+};
+
+const updateMeshComponents = (vehicle) => {
+    // Logic to animate wheels based on speed
+    vehicle.mesh.children.forEach(child => {
+        if (child.geometry instanceof THREE.CylinderGeometry) {
+            child.rotation.x += vehicle.speed * 0.01;
+        }
+    });
+};
+
+const calculateGrip = (vehicle) => vehicle.grip * 0.8;
+const applyEngineForce = (vehicle, force) => vehicle.speed += force;
+const getEngineOutput = (vehicle) => vehicle.speed * vehicle.acc;
+const checkSuspension = (vehicle) => vehicle.suspension > 0.2;
+const isDead = (vehicle) => vehicle.durability <= 0;
