@@ -58,8 +58,8 @@ window.__photo = {
         initPolice();
         initCombat();
         initRadio();
-        createMissions();
-        createEconomy();
+        createMissions({scene, player, hud});
+        createEconomy({scene, player, hud});
 
         save = Object.assign(save, canonicalSave());
         save.missionIndex = spec.job - 1;
@@ -178,6 +178,7 @@ function renderLoop() {
 // Initial Boot
 buildCity(scene);
 save = loadSave();
+document.addEventListener('keydown', (e) => { if (e.key === 'F5') saveSave(save); });
 openStartScreen(save, {
     onContinue: () => { closeCurrentScreen(); },
     onNewGame: () => { clearSave(); closeCurrentScreen(); }
