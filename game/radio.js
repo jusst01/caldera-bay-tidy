@@ -1,28 +1,22 @@
 import * as THREE from './three.module.min.js';
 
-let audioCtx = null;
-let currentStation = 0;
+let audioContext = null;
+let currentStationIndex = 0;
 const stations = ['RADIO CALDERA FM', 'ONDA NOCTURNA', 'CENIZA INDUSTRIAL'];
 
-export function initRadio() {
-  if (!audioCtx) audioCtx = new AudioContext();
+function initRadio() {
+  if (!audioContext) audioContext = new AudioContext();
+}
+function startRadio() {}
+function cycleStation() {
+  currentStationIndex = (currentStationIndex + 1) % stations.length;
+}
+function getCurrentStationInfo(save) {
+  return { index: currentStationIndex, name: stations[currentStationIndex] };
+}
+function stopRadio() {
+  if (audioContext) audioContext.close();
+  audioContext = null;
 }
 
-export function startRadio() {
-  if (!audioCtx) initRadio();
-}
-
-export function cycleStation() {
-  currentStation = (currentStation + 1) % stations.length;
-}
-
-export function getCurrentStationInfo(save) {
-  return { index: currentStation, name: stations[currentStation] };
-}
-
-export function stopRadio() {
-  if (audioCtx) {
-    audioCtx.close();
-    audioCtx = null;
-  }
-}
+export { initRadio, startRadio, cycleStation, getCurrentStationInfo, stopRadio };
